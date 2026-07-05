@@ -5,7 +5,7 @@
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安装-670000?logo=greasyfork&logoColor=white)](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s)
 [![GitHub](https://img.shields.io/badge/GitHub-源码-181717?logo=github&logoColor=white)](https://github.com/weiningwei/zh-t2s)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.1-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.2-green)](CHANGELOG.md)
 
 基于 [opencc-js](https://github.com/nk2028/opencc-js)（纯 JavaScript 版 OpenCC）实现，内置 mmseg 短语分词，正确处理一对多映射（如 `乾隆` 中的 `乾` 不被误转为 `干`；简转繁时 `发展` 用 `發`、`头发` 用 `髮`）。默认方向为繁→简，可通过油猴菜单切换为简→繁。
 
@@ -27,6 +27,7 @@
 - **无死循环**：通过状态记录区分"自身写入"与"外部写入"，避免转换回写触发观察者导致的无限循环。
 - **编辑友好**：跳过当前聚焦的 `contenteditable` 区域，避免打断用户输入。
 - **一键开关 + 方向切换**：油猴菜单两个互斥项，状态全局持久化，切换方向时还原原文并用新方向重转。
+- **转换统计**：菜单显示当前页面已转换字符数与 OpenCC 耗时，会话级统计，切换方向时重置。
 
 ## 安装
 

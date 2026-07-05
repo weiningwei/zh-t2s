@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.1
+// @version      2.0.2
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -103,6 +103,11 @@
   let channel = null;
   try { channel = new BroadcastChannel('zh-t2s'); } catch (e) { channel = null; }
 
+  // 会话级统计（页面刷新即重置，不持久化）
+  // chars: 实际改变字符数（仅当 OpenCC 输出 ≠ 输入时累加 text.length）
+  // time:  OpenCC 调用累计耗时（ms，performance.now 测量）
+  let stats = { chars: 0, time: 0 };
+
   /* ============================================================
    * 3. 状态记录：避免重复转换与自触发死循环
    * ============================================================
@@ -154,8 +159,11 @@
     if (!HAS_CJK.test(text)) return;                    // 预检：无汉字直接跳过
     if (textState.get(node) === text) return;          // 自己上次写入的值，无外部改动
     if (!textOriginal.has(node)) textOriginal.set(node, text); // 记录原始值，供关闭时还原
+    const t0 = performance.now();
     const out = safeConvert(text);
+    stats.time += performance.now() - t0;              // 累计 OpenCC 耗时
     if (out !== text) {
+      stats.chars += text.length;                      // 累计实际改变字符数
       node.nodeValue = out;                             // 写回会触发 characterData 变更
       textState.set(node, out);
     } else {
@@ -175,8 +183,13 @@
       if (map.get(attr) === val) continue;              // 自己上次写入的值
       if (!HAS_CJK.test(val)) { map.set(attr, val); continue; } // 预检：无汉字直接跳过
       if (!origMap.has(attr)) origMap.set(attr, val);   // 记录原始值
+      const t0 = performance.now();
       const out = safeConvert(val);
-      if (out !== val) el.setAttribute(attr, out);
+      stats.time += performance.now() - t0;            // 累计 OpenCC 耗时
+      if (out !== val) {
+        stats.chars += val.length;                      // 累计实际改变字符数
+        el.setAttribute(attr, out);
+      }
       map.set(attr, out);
     }
   }
@@ -389,6 +402,7 @@
       scheduled = false;
       restoreAll();
       clearAllState();
+      stats = { chars: 0, time: 0 };                    // 统计清零（还原+重转会让数字失真）
       convert = converters[newState];
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       enqueueSubtree(document.documentElement);
@@ -443,6 +457,11 @@
       ? '简→繁 转换：✅ 开启中（点击关闭）'
       : '简→繁 转换（点击开启）';
   }
+  function menuCaptionStats() {
+    // 耗时显示：小于 10ms 显示 1 位小数，否则取整
+    const t = stats.time < 10 ? stats.time.toFixed(1) : Math.round(stats.time);
+    return `📊 已转 ${stats.chars} 字 / ${t}ms（点击刷新）`;
+  }
 
   function refreshMenu() {
     if (typeof GM_registerMenuCommand !== 'function') return;
@@ -458,6 +477,10 @@
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionS2T(), () => {
         setState(state === 's2t' ? 'off' : 's2t');
       }, 's'));
+      // 第三个项：只读统计，点击重新注册以刷新标题
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionStats(), () => {
+        refreshMenu();
+      }, 'r'));
     } catch (e) {}
   }
 
