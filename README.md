@@ -106,7 +106,7 @@ const CHUNK_SIZE   = 300;  // 每个空闲帧最多处理的节点数
 
 ## 许可证
 
-MIT
+[MIT](LICENSE)
 
 ## 链接
 
