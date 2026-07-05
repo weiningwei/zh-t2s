@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.1] - 2026-07-05
+
+### 修复
+
+- **关闭状态刷新后丢失**：`setState('off')` 存储的字符串 `'off'` 在启动读取时未匹配任何分支,被当作未知值回退到默认 `t2s`,导致关闭脚本后刷新页面又自动开启。新增 `saved === 'off'` 显式分支,并将 if-else 链改为以 `else` 兜底 `t2s`。
+
 ## [2.0.0] - 2026-07-05
 
 ### 新增
