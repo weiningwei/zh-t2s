@@ -4,6 +4,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.11] - 2026-07-05
+
+### 修复
+
+- **菜单状态与实际不一致**：白名单页/opencc-js 未加载时，菜单开关项仍显示 `✅`（依据全局持久化 `state`），但实际未转换。新增 `effectiveState()` 综合白名单和 opencc-js 可用性，`menuCaptionT2S`/`menuCaptionS2T`/`menuCaptionStatus` 改用该方法展示当前页真实生效状态。
+
+### 新增
+
+- `effectiveState()` 辅助函数，综合 `isWhitelisted` 和 `hasOpenCC` 返回当前页实际生效状态。
+
 ## [2.0.10] - 2026-07-05
 
 ### 修复

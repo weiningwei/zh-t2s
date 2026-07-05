@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.10
+// @version      2.0.11
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -222,6 +222,12 @@
 
   function saveWhitelist() {
     try { if (typeof GM_setValue === 'function') GM_setValue(WHITELIST_KEY, whitelist); } catch (e) {}
+  }
+
+  /** 当前页实际生效状态（综合白名单、opencc-js 可用性） */
+  function effectiveState() {
+    if (isWhitelisted || !hasOpenCC) return 'off';
+    return state;
   }
 
   /* ============================================================
@@ -576,11 +582,11 @@
 
   function menuCaptionT2S() {
     const sc = formatShortcut(shortcutT2S);
-    return state === 't2s' ? `✅ 繁→简 [${sc}]` : `⏸ 繁→简 [${sc}]`;
+    return effectiveState() === 't2s' ? `✅ 繁→简 [${sc}]` : `⏸ 繁→简 [${sc}]`;
   }
   function menuCaptionS2T() {
     const sc = formatShortcut(shortcutS2T);
-    return state === 's2t' ? `✅ 简→繁 [${sc}]` : `⏸ 简→繁 [${sc}]`;
+    return effectiveState() === 's2t' ? `✅ 简→繁 [${sc}]` : `⏸ 简→繁 [${sc}]`;
   }
   function menuCaptionStats() {
     // 耗时显示：小于 10ms 显示 1 位小数，否则取整
@@ -602,6 +608,7 @@
     return `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
   }
   function menuCaptionStatus() {
+    if (!hasOpenCC) return `⚪ 当前页：opencc-js 未加载`;
     if (isWhitelisted) return `⚪ 当前页：已忽略（${currentHost}）`;
     if (state === 'off') return `⚪ 当前页：已关闭`;
     const dir = state === 't2s' ? '繁→简' : '简→繁';
