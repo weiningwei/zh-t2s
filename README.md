@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.2.0-green)](CHANGELOG.md)
 
-基于 [opencc-js](https://github.com/nk2028/opencc-js)（纯 JavaScript 版 OpenCC）实现，内置 mmseg 短语分词，可依据上下文正确处理一对多映射字词（如 `乾燥→干燥`、`乾坤→乾坤`、`頭髮→头发`、`發展→发展`）。
+基于 [opencc-js](https://github.com/nk2028/opencc-js)（纯 JavaScript 版 OpenCC）实现，内置 mmseg 短语分词，正确处理一对多映射（如 `乾隆` 中的 `乾` 不被误转为 `干`；简转繁时 `发展` 用 `發`、`头发` 用 `髮`）。
 
 ## 效果演示
 
@@ -45,9 +45,32 @@
 
 安装后默认开启，访问任意繁体网页即自动转换。
 
-**切换开关**：点击浏览器右上角 Tampermonkey 扩展图标，菜单中可见 `繁→简 转换：✅ 已开启（点击关闭）`，点击即切换。状态全局持久化，所有标签页共享。
+### 切换开关
 
-**忽略特定元素**：给元素添加 `class="ignore-opencc"`，其子树不会被转换。
+点击浏览器右上角 Tampermonkey 扩展图标，菜单中可见 `繁→简 转换：✅ 已开启（点击关闭）`，点击即切换。状态全局持久化，所有标签页共享。
+
+### 转换示例
+
+| 场景 | 转换前（繁体） | 转换后（简体） |
+| --- | --- | --- |
+| 正文 | 網頁中的繁體中文 | 网页中的繁体中文 |
+| 标题 | `<title>維基百科</title>` | `<title>维基百科</title>` |
+| 表单提示 | `<input placeholder="搜尋">` | `<input placeholder="搜索">` |
+| 鼠标悬停 | `<a title="點擊檢視">` | `<a title="点击查看">` |
+| 图像替代 | `<img alt="圖片說明">` | `<img alt="图片说明">` |
+| 无障碍标签 | `<button aria-label="關閉">` | `<button aria-label="关闭">` |
+| 词组保形 | 乾隆 | 乾隆（`乾` 不转 `干`） |
+| 动态内容 | AJAX 加载的繁体文本 | 自动转换（MutationObserver 监听） |
+
+### 忽略特定元素
+
+给元素添加 `class="ignore-opencc"`，其子树不会被转换：
+
+```html
+<div class="ignore-opencc">
+  這裡的繁體字保持不變
+</div>
+```
 
 ## 工作原理
 
