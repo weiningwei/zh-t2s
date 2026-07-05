@@ -90,10 +90,10 @@
   try {
     if (typeof GM_getValue === 'function') {
       const saved = GM_getValue(STATE_KEY, 't2s');
-      if (saved === '0') state = 'off';            // 旧版关闭值
-      else if (saved === '1' || saved === 't2s') state = 't2s'; // 旧版开启值 / 新版默认
-      else if (saved === 's2t') state = 's2t';
-      // 其他未知值保持默认 't2s'
+      if (saved === 'off') state = 'off';        // 新版关闭
+      else if (saved === '0') state = 'off';     // 旧版关闭值
+      else if (saved === 's2t') state = 's2t';   // 简→繁
+      else state = 't2s';                         // 't2s' / '1' / 未知值 → 默认繁→简
     }
   } catch (e) { /* 读取失败保持默认开启 */ }
 
