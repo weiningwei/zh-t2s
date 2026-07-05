@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.13] - 2026-07-05
+
+### 修复
+
+- **iframe 菜单项泄露**：Tampermonkey 沙箱下跨域 iframe 的 `window.top` 可能不抛异常，导致 `window.top !== window.self` 检查失效。改用比较 `window.top.location.href !== window.location.href`，跨域 iframe 必然抛异常进入 catch 返回，彻底杜绝广告/跟踪 iframe 注册菜单项。
+
 ## [2.0.12] - 2026-07-05
 
 ### 修复
