@@ -2,6 +2,11 @@
 
 一个 Tampermonkey 用户脚本，自动将网页中的**繁体中文**转换为**简体中文**。
 
+[![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安装-670000?logo=greasyfork&logoColor=white)](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s)
+[![GitHub](https://img.shields.io/badge/GitHub-源码-181717?logo=github&logoColor=white)](https://github.com/weiningwei/zh-t2s)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.2.0-green)](CHANGELOG.md)
+
 基于 [opencc-js](https://github.com/nk2028/opencc-js)（纯 JavaScript 版 OpenCC）实现，内置 mmseg 短语分词，可依据上下文正确处理一对多映射字词（如 `乾燥→干燥`、`乾坤→乾坤`、`頭髮→头发`、`發展→发展`）。
 
 ## 功能特性
@@ -16,8 +21,14 @@
 
 ## 安装
 
+**方式一：Greasy Fork（推荐）**
+
+点击 [Greasy Fork 脚本页](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s) 的"安装此脚本"按钮，Tampermonkey 会自动识别并提示安装。后续 Greasy Fork 会定期拉取 GitHub 主分支的更新，无需手动重装。
+
+**方式二：GitHub Raw**
+
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展。
-2. 打开 `zh-t2s.user.js`，点击 Raw 按钮，Tampermonkey 会自动识别并提示安装；或手动新建脚本粘贴内容。
+2. 打开 [`zh-t2s.user.js`](zh-t2s.user.js)，点击 Raw 按钮，Tampermonkey 会自动识别并提示安装；或手动新建脚本粘贴内容。
 3. 安装后访问任意繁体中文网页即可自动转换。
 
 > 脚本通过 `@require` 从 jsDelivr CDN 加载 `opencc-js@1.4.0`（字典已在构建时打包进库，运行时不再请求字典）。若网络无法访问 CDN，控制台会输出 `[zh-t2s] opencc-js 未加载` 警告且不进行转换。
@@ -49,3 +60,10 @@ const CHUNK_SIZE   = 300;  // 每个空闲帧最多处理的节点数
 ## 许可证
 
 MIT
+
+## 链接
+
+- [Greasy Fork 脚本页](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s)
+- [GitHub 仓库](https://github.com/weiningwei/zh-t2s)
+- [更新日志](CHANGELOG.md)
+- [问题反馈](https://github.com/weiningwei/zh-t2s/issues)
