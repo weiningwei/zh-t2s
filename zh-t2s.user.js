@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.8
+// @version      2.0.9
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -39,19 +39,20 @@
    *   例（s2t）：发展→發展、头发→頭髮（同一简体字对应多繁体字）
    * ============================================================ */
   const OpenCC = window.OpenCC;
-  if (!OpenCC || typeof OpenCC.Converter !== 'function') {
+  const hasOpenCC = !!(OpenCC && typeof OpenCC.Converter === 'function');
+  if (!hasOpenCC) {
     console.warn('[zh-t2s] opencc-js 未加载，繁简转换已禁用（请检查网络或 @require 地址）。');
-    return;
   }
   // 字典在 opencc-js 模块级共享，两个 converter 实例仅配置对象，内存增量可忽略
-  const converters = {
+  const converters = hasOpenCC ? {
     t2s: OpenCC.Converter({ from: 't', to: 'cn' }),
     s2t: OpenCC.Converter({ from: 'cn', to: 't' })
-  };
-  let convert = converters.t2s; // 当前活跃 converter，由 setState 切换
+  } : {};
+  let convert = hasOpenCC ? converters.t2s : null; // 当前活跃 converter，由 setState 切换
 
   /** 包裹一层异常保护，避免转换器异常时影响页面或观察者 */
   function safeConvert(text) {
+    if (!convert) return text;
     try { return convert(text); }
     catch (e) { return text; }
   }
@@ -511,7 +512,7 @@
       scheduled = false;
       restoreAll();
       clearAllState();
-    } else if (directionChanged) {
+    } else if (directionChanged && hasOpenCC) {
       // 方向切换：必须还原 + 清空 state + 用新方向重扫
       observer.disconnect();
       queue.clear();
@@ -523,7 +524,7 @@
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       enqueueSubtree(document.documentElement);
       scheduleIdle();
-    } else if (!wasActive && isActive) {
+    } else if (!wasActive && isActive && hasOpenCC) {
       // 从关闭到开启（同方向）
       convert = converters[newState];
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
@@ -743,7 +744,7 @@
    * 9. 启动
    * ============================================================ */
   function start() {
-    if (state !== 'off' && !isWhitelisted) {   // 白名单中的域名不启动转换
+    if (state !== 'off' && !isWhitelisted && hasOpenCC) {   // 白名单/无 opencc 时不启动转换
       convert = converters[state];
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
@@ -751,7 +752,7 @@
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     }
-    registerMenu(); // 无论白名单/关闭状态都注册菜单，供用户管理
+    registerMenu(); // 无论白名单/关闭/无 opencc 状态都注册菜单，供用户管理
   }
 
   if (document.readyState === 'loading') {

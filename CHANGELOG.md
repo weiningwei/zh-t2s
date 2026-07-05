@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.9] - 2026-07-05
+
+### 修复
+
+- **菜单不随 opencc-js 加载状态而消失**：opencc-js 加载失败时脚本会 `return` 退出，菜单永远不注册。改为始终注册菜单，仅禁用转换功能；`applyState`/`start` 中所有转换路径均受 `hasOpenCC` 守卫。
+
 ## [2.0.8] - 2026-07-05
 
 ### 修复
