@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.14] - 2026-07-05
+
+### 修复
+
+- **iframe 重复注册菜单**：Tampermonkey 沙箱中 JS 级 iframe 检测（`window.top !== window.self` / `location.href` 比较）在跨域场景下不可靠。改用元数据 `@noframes` 阻止 Tampermonkey 向 iframe 注入脚本，从源头杜绝广告/跟踪 iframe 注册菜单项。保留 JS 检测作防御性兼容。
+
 ## [2.0.13] - 2026-07-05
 
 ### 修复

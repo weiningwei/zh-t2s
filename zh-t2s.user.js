@@ -4,13 +4,14 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.13
+// @version      2.0.14
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
 // @description:en    Bidirectional OpenCC-based conversion between Traditional and Simplified Chinese on web pages. Covers body text, titles, form placeholders, and other visible text. Supports dynamic content and batched processing. Defaults to Traditional→Simplified; menu can switch to Simplified→Traditional.
 // @author       weiningwei
 // @match        *://*/*
+// @noframes
 // @require      https://cdn.jsdelivr.net/npm/opencc-js@1.4.0/dist/umd/full.js
 // @run-at       document-idle
 // @grant        GM_registerMenuCommand
@@ -694,9 +695,8 @@
   }
 
   function registerMenu() {
-    // 仅顶层页面注册菜单，iframe 一律跳过
-    try { if (window.top.location.href !== window.location.href) return; }
-    catch (e) { return; } // 跨域 iframe 不可访问 top.location
+    // @noframes 保证仅顶层执行，此处防御性检查兼容不支持 @noframes 的脚本管理器
+    try { if (window.top !== window.self) return; } catch (e) { return; }
     refreshMenu();
   }
 
