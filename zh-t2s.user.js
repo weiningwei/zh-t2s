@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.5
+// @version      2.0.6
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -139,14 +139,56 @@
            e.metaKey === shortcut.meta;
   }
 
-  function formatShortcut(s) {
-    const parts = [];
-    if (s.ctrl) parts.push('Ctrl');
-    if (s.alt) parts.push('Alt');
-    if (s.shift) parts.push('Shift');
-    if (s.meta) parts.push('Meta');
-    parts.push(s.key);
-    return parts.join('+');
+  // 浏览器/系统常见快捷键黑名单（Ctrl+字母组合），配置时警告
+  const BROWSER_SHORTCUT_CONFLICTS = {
+    'Ctrl+S': '保存',
+    'Ctrl+W': '关闭标签页',
+    'Ctrl+T': '新标签页',
+    'Ctrl+N': '新窗口',
+    'Ctrl+P': '打印',
+    'Ctrl+F': '查找',
+    'Ctrl+G': '查找下一个',
+    'Ctrl+H': '历史记录',
+    'Ctrl+J': '下载列表',
+    'Ctrl+D': '加入书签',
+    'Ctrl+L': '地址栏',
+    'Ctrl+O': '打开文件',
+    'Ctrl+Q': '退出',
+    'Ctrl+R': '刷新',
+    'Ctrl+A': '全选',
+    'Ctrl+C': '复制',
+    'Ctrl+V': '粘贴',
+    'Ctrl+X': '剪切',
+    'Ctrl+Z': '撤销',
+    'Ctrl+Y': '重做',
+    'Ctrl+Tab': '切换标签页',
+    'Ctrl+Shift+T': '恢复关闭的标签页',
+    'Ctrl+Shift+N': '隐私窗口',
+    'Ctrl+Shift+Delete': '清除浏览数据',
+    'F1': '帮助',
+    'F3': '查找下一个',
+    'F5': '刷新',
+    'F11': '全屏',
+    'F12': '开发者工具'
+  };
+
+  let conflictWarning = null; // 非空时显示警告，3 秒后清除
+
+  function detectConflict(sc, otherShortcut) {
+    // 与另一方向快捷键冲突
+    if (sc.key === otherShortcut.key &&
+        sc.ctrl === otherShortcut.ctrl &&
+        sc.alt === otherShortcut.alt &&
+        sc.shift === otherShortcut.shift &&
+        sc.meta === otherShortcut.meta) {
+      return '与另一方向快捷键相同';
+    }
+    // 与浏览器常见快捷键冲突
+    const name = formatShortcut(sc);
+    if (BROWSER_SHORTCUT_CONFLICTS[name]) {
+      return `浏览器「${BROWSER_SHORTCUT_CONFLICTS[name]}」快捷键`;
+    }
+    return null;
   }
 
   /* ============================================================
@@ -513,14 +555,18 @@
     return `📊 ${stats.chars}字 / ${t}ms`;
   }
   function menuCaptionConfigT2S() {
-    return capturingShortcut === 't2s'
-      ? '⌨️ 繁→简：按下新键（Esc 取消）'
-      : `⚙️ 繁→简键：${formatShortcut(shortcutT2S)}`;
+    if (capturingShortcut === 't2s') return '⌨️ 繁→简：按下新键（Esc 取消）';
+    if (conflictWarning && conflictWarning.target === 't2s') {
+      return `⚠️ ${conflictWarning.msg}，请重新配置`;
+    }
+    return `⚙️ 繁→简键：${formatShortcut(shortcutT2S)}`;
   }
   function menuCaptionConfigS2T() {
-    return capturingShortcut === 's2t'
-      ? '⌨️ 简→繁：按下新键（Esc 取消）'
-      : `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
+    if (capturingShortcut === 's2t') return '⌨️ 简→繁：按下新键（Esc 取消）';
+    if (conflictWarning && conflictWarning.target === 's2t') {
+      return `⚠️ ${conflictWarning.msg}，请重新配置`;
+    }
+    return `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
   }
 
   function refreshMenu() {
@@ -578,6 +624,7 @@
       e.stopPropagation();
       if (e.key === 'Escape') {
         capturingShortcut = null;
+        conflictWarning = null;
         refreshMenu();
         return;
       }
@@ -585,6 +632,20 @@
         key: e.key.length === 1 ? e.key.toUpperCase() : e.key,
         ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey
       };
+      // 冲突检测：与另一方向相同 / 与浏览器常见快捷键冲突
+      const other = capturingShortcut === 't2s' ? shortcutS2T : shortcutT2S;
+      const conflict = detectConflict(newShortcut, other);
+      if (conflict) {
+        // 有冲突：不保存，显示警告 3 秒后清除
+        conflictWarning = { target: capturingShortcut, msg: conflict };
+        capturingShortcut = null;
+        refreshMenu();
+        setTimeout(() => {
+          conflictWarning = null;
+          refreshMenu();
+        }, 3000);
+        return;
+      }
       if (capturingShortcut === 't2s') {
         shortcutT2S = newShortcut;
         try { if (typeof GM_setValue === 'function') GM_setValue(SHORTCUT_KEY_T2S, newShortcut); } catch (e) {}
@@ -593,6 +654,7 @@
         try { if (typeof GM_setValue === 'function') GM_setValue(SHORTCUT_KEY_S2T, newShortcut); } catch (e) {}
       }
       capturingShortcut = null;
+      conflictWarning = null;
       refreshMenu();
       return;
     }
