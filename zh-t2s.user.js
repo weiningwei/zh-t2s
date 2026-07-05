@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.3
+// @version      2.0.4
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -107,6 +107,47 @@
   // chars: 实际改变字符数（仅当 OpenCC 输出 ≠ 输入时累加 text.length）
   // time:  OpenCC 调用累计耗时（ms，performance.now 测量）
   let stats = { chars: 0, time: 0 };
+
+  /* ============================================================
+   * 2.2 快捷键配置（默认 F8/F9，持久化到 GM 存储）
+   * ============================================================
+   * F8 = 繁→简 方向开关，F9 = 简→繁 方向开关
+   * 通过菜单项"配置快捷键"进入捕获模式，下一次按键即新快捷键
+   * 表单聚焦时不响应（input/textarea/contenteditable）
+   * ============================================================ */
+  const SHORTCUT_KEY_T2S = 'zh-t2s-shortcut-t2s';
+  const SHORTCUT_KEY_S2T = 'zh-t2s-shortcut-s2t';
+  let shortcutT2S = { key: 'F8', ctrl: false, alt: false, shift: false, meta: false };
+  let shortcutS2T = { key: 'F9', ctrl: false, alt: false, shift: false, meta: false };
+  let capturingShortcut = null; // null | 't2s' | 's2t'，配置捕获模式标志
+  try {
+    if (typeof GM_getValue === 'function') {
+      const s1 = GM_getValue(SHORTCUT_KEY_T2S, null);
+      if (s1 && typeof s1 === 'object' && s1.key) shortcutT2S = s1;
+      const s2 = GM_getValue(SHORTCUT_KEY_S2T, null);
+      if (s2 && typeof s2 === 'object' && s2.key) shortcutS2T = s2;
+    }
+  } catch (e) {}
+
+  function matchShortcut(e, shortcut) {
+    // 标准化键名：单字符转大写，多字符（F1-F12、Enter 等）保留
+    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    return key === shortcut.key &&
+           e.ctrlKey === shortcut.ctrl &&
+           e.altKey === shortcut.alt &&
+           e.shiftKey === shortcut.shift &&
+           e.metaKey === shortcut.meta;
+  }
+
+  function formatShortcut(s) {
+    const parts = [];
+    if (s.ctrl) parts.push('Ctrl');
+    if (s.alt) parts.push('Alt');
+    if (s.shift) parts.push('Shift');
+    if (s.meta) parts.push('Meta');
+    parts.push(s.key);
+    return parts.join('+');
+  }
 
   /* ============================================================
    * 3. 状态记录：避免重复转换与自触发死循环
@@ -459,19 +500,31 @@
   let menuCmdIds = [];
 
   function menuCaptionT2S() {
+    const sc = formatShortcut(shortcutT2S);
     return state === 't2s'
-      ? '繁→简 转换：✅ 开启中（点击关闭）'
-      : '繁→简 转换（点击开启）';
+      ? `繁→简 转换：✅ 开启中（点击关闭）[${sc}]`
+      : `繁→简 转换（点击开启）[${sc}]`;
   }
   function menuCaptionS2T() {
+    const sc = formatShortcut(shortcutS2T);
     return state === 's2t'
-      ? '简→繁 转换：✅ 开启中（点击关闭）'
-      : '简→繁 转换（点击开启）';
+      ? `简→繁 转换：✅ 开启中（点击关闭）[${sc}]`
+      : `简→繁 转换（点击开启）[${sc}]`;
   }
   function menuCaptionStats() {
     // 耗时显示：小于 10ms 显示 1 位小数，否则取整
     const t = stats.time < 10 ? stats.time.toFixed(1) : Math.round(stats.time);
     return `📊 已转 ${stats.chars} 字 / ${t}ms（点击刷新）`;
+  }
+  function menuCaptionConfigT2S() {
+    return capturingShortcut === 't2s'
+      ? '⌨️ 繁→简：按下新快捷键（Esc 取消）...'
+      : `⚙️ 繁→简快捷键：${formatShortcut(shortcutT2S)}（点击配置）`;
+  }
+  function menuCaptionConfigS2T() {
+    return capturingShortcut === 's2t'
+      ? '⌨️ 简→繁：按下新快捷键（Esc 取消）...'
+      : `⚙️ 简→繁快捷键：${formatShortcut(shortcutS2T)}（点击配置）`;
   }
 
   function refreshMenu() {
@@ -492,6 +545,15 @@
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionStats(), () => {
         refreshMenu();
       }, 'r'));
+      // 第四、五项：快捷键配置
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionConfigT2S(), () => {
+        capturingShortcut = 't2s';
+        refreshMenu(); // 立即更新标题提示用户按键
+      }, 'c1'));
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionConfigS2T(), () => {
+        capturingShortcut = 's2t';
+        refreshMenu();
+      }, 'c2'));
     } catch (e) {}
   }
 
@@ -499,6 +561,57 @@
     if (window.top !== window.self) return; // 仅顶层框架注册
     refreshMenu();
   }
+
+  /* ============================================================
+   * 8.1 快捷键监听（捕获阶段，优先于页面脚本）
+   * ============================================================
+   * - 正常模式：匹配 F8/F9（或用户配置）切换 t2s/s2t 开关
+   * - 捕获模式：任意按键作为新快捷键，Esc 取消
+   * - 表单聚焦时（input/textarea/contenteditable）不响应正常模式
+   * ============================================================ */
+  document.addEventListener('keydown', (e) => {
+    const ae = document.activeElement;
+    const inForm = ae && (
+      ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
+      ae.isContentEditable
+    );
+
+    // 捕获模式：任何按键都作为新快捷键（不跳过表单，让用户随处可配置）
+    if (capturingShortcut) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        capturingShortcut = null;
+        refreshMenu();
+        return;
+      }
+      const newShortcut = {
+        key: e.key.length === 1 ? e.key.toUpperCase() : e.key,
+        ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey
+      };
+      if (capturingShortcut === 't2s') {
+        shortcutT2S = newShortcut;
+        try { if (typeof GM_setValue === 'function') GM_setValue(SHORTCUT_KEY_T2S, newShortcut); } catch (e) {}
+      } else {
+        shortcutS2T = newShortcut;
+        try { if (typeof GM_setValue === 'function') GM_setValue(SHORTCUT_KEY_S2T, newShortcut); } catch (e) {}
+      }
+      capturingShortcut = null;
+      refreshMenu();
+      return;
+    }
+
+    // 正常模式：表单聚焦时跳过
+    if (inForm) return;
+
+    if (matchShortcut(e, shortcutT2S)) {
+      e.preventDefault();
+      setState(state === 't2s' ? 'off' : 't2s');
+    } else if (matchShortcut(e, shortcutS2T)) {
+      e.preventDefault();
+      setState(state === 's2t' ? 'off' : 's2t');
+    }
+  }, true);
 
   /* ============================================================
    * 9. 启动
