@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         繁转简 (zh-t2s)
-// @name:zh-CN   繁转简 (zh-t2s)
-// @name:zh-TW   繁轉簡 (zh-t2s)
+// @name         繁简转换 (zh-t2s)
+// @name:zh-CN   繁简转换 (zh-t2s)
+// @name:zh-TW   繁簡轉換 (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      1.2.0
-// @description       基于 OpenCC 自动将网页繁体中文转为简体，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理。
-// @description:zh-CN 基于 OpenCC 自动将网页繁体中文转为简体，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理。
-// @description:zh-TW 基於 OpenCC 自動將網頁繁體中文轉為簡體，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理。
+// @version      2.0.0
+// @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
+// @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
+// @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
 // @author       weiningwei
 // @match        *://*/*
 // @require      https://cdn.jsdelivr.net/npm/opencc-js@1.4.0/dist/umd/full.js
@@ -28,18 +28,25 @@
    * ============================================================
    * 使用 opencc-js（纯 JS 版 OpenCC），通过 @require 从 CDN 注入，
    * 字典在构建时已打包进脚本，运行时无需再请求字典文件。
-   * 方向选择 from:'t' -> to:'cn'（OpenCC 标准 t2s）：
-   *   - 通用繁体输入（兼容台湾 / 香港繁体）
-   *   - 仅做字形繁简转换，不改变地区用词（如“軟體”不会变成“软件”）
-   *   - 内置 mmseg 短语分词，可依据上下文解决一对多映射
-   *     例：乾燥→干燥、乾坤→乾坤、頭髮→头发、發展→发展
+   * 同时构造两个方向的 converter 并缓存：
+   *   - t2s: from 't' -> to 'cn'（OpenCC 标准 t2s，繁→简）
+   *   - s2t: from 'cn' -> to 't'（OpenCC 标准 s2t，简→繁）
+   * 仅做字形繁简转换，不改变地区用词（如"軟體"不会变成"软件"）。
+   * 内置 mmseg 短语分词，可依据上下文解决一对多映射
+   *   例（t2s）：乾隆 不被误转为 干隆
+   *   例（s2t）：发展→發展、头发→頭髮（同一简体字对应多繁体字）
    * ============================================================ */
   const OpenCC = window.OpenCC;
   if (!OpenCC || typeof OpenCC.Converter !== 'function') {
     console.warn('[zh-t2s] opencc-js 未加载，繁简转换已禁用（请检查网络或 @require 地址）。');
     return;
   }
-  const convert = OpenCC.Converter({ from: 't', to: 'cn' });
+  // 字典在 opencc-js 模块级共享，两个 converter 实例仅配置对象，内存增量可忽略
+  const converters = {
+    t2s: OpenCC.Converter({ from: 't', to: 'cn' }),
+    s2t: OpenCC.Converter({ from: 'cn', to: 't' })
+  };
+  let convert = converters.t2s; // 当前活跃 converter，由 setState 切换
 
   /** 包裹一层异常保护，避免转换器异常时影响页面或观察者 */
   function safeConvert(text) {
@@ -71,20 +78,26 @@
   const CONVERTIBLE_ATTRS = ['placeholder', 'title', 'alt', 'aria-label'];
 
   /* ============================================================
-   * 2.1 开关状态（持久化到 GM 存储，全局共享）
+   * 2.1 状态模型（持久化到 GM 存储，全局共享）
    * ============================================================
-   * 默认开启；用户点击油猴菜单项后写入 GM_setValue，所有站点共享。
-   * 刷新后保持；BroadcastChannel 用于同步同源 iframe 的实时切换。
+   * 三态：'t2s'（繁→简，默认）| 's2t'（简→繁）| 'off'（关闭）
+   * 通过油猴菜单两个互斥项切换：点当前方向项则关闭，点另一方向项则切换。
+   * GM_setValue 全局共享，所有站点同方向；BroadcastChannel 同步同源 iframe。
+   * 兼容旧版：旧 key 存 '1'/'0'，启动时自动迁移为新三态。
    * ============================================================ */
-  const STORAGE_KEY = 'zh-t2s-enabled';
-  let enabled = true;
+  const STATE_KEY = 'zh-t2s-enabled'; // 保留 key，避免旧用户偏好丢失
+  let state = 't2s'; // 'off' | 't2s' | 's2t'
   try {
-    if (typeof GM_getValue === 'function' && GM_getValue(STORAGE_KEY, '1') === '0') {
-      enabled = false;
+    if (typeof GM_getValue === 'function') {
+      const saved = GM_getValue(STATE_KEY, 't2s');
+      if (saved === '0') state = 'off';            // 旧版关闭值
+      else if (saved === '1' || saved === 't2s') state = 't2s'; // 旧版开启值 / 新版默认
+      else if (saved === 's2t') state = 's2t';
+      // 其他未知值保持默认 't2s'
     }
   } catch (e) { /* 读取失败保持默认开启 */ }
 
-  // 跨框架同步（同源 iframe 之间实时同步开关状态）
+  // 跨框架同步（同源 iframe 之间实时同步状态）
   let channel = null;
   try { channel = new BroadcastChannel('zh-t2s'); } catch (e) { channel = null; }
 
@@ -98,11 +111,19 @@
    *   - 若当前值 === 记录值，说明是我们自己的写入未被改动，跳过。
    *   - 若当前值 !== 记录值，说明外部改动了文本，需要重新转换。
    * ============================================================ */
-  const textState = new WeakMap(); // Text 节点 -> 最近一次写入值
-  const attrState = new WeakMap(); // Element   -> Map<属性名, 最近一次写入值>
-  // 记录转换前的原始值，关闭开关时用于还原 DOM
-  const textOriginal = new WeakMap(); // Text 节点 -> 转换前的原始值
-  const attrOriginal = new WeakMap(); // Element   -> Map<属性名, 转换前的原始值>
+  let textState = new WeakMap(); // Text 节点 -> 最近一次写入值
+  let attrState = new WeakMap(); // Element   -> Map<属性名, 最近一次写入值>
+  // 记录转换前的原始值，关闭开关或切换方向时用于还原 DOM
+  let textOriginal = new WeakMap(); // Text 节点 -> 转换前的原始值
+  let attrOriginal = new WeakMap(); // Element   -> Map<属性名, 转换前的原始值>
+
+  /** 清空所有状态记录（切换方向时必须调用，避免旧方向的状态干扰新方向判断） */
+  function clearAllState() {
+    textState = new WeakMap();
+    attrState = new WeakMap();
+    textOriginal = new WeakMap();
+    attrOriginal = new WeakMap();
+  }
 
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
   function inActiveEditable(node) {
@@ -346,61 +367,96 @@
     }
   }
 
-  /** 应用开关状态（不写存储、不广播，仅做实际工作） */
-  function applyEnabled(v) {
-    if (v) {
-      observer.observe(document.documentElement, OBSERVER_OPTIONS);
-      enqueueSubtree(document.documentElement);
-      scheduleIdle();
-    } else {
+  /** 应用状态转移（不写存储、不广播，仅做实际工作） */
+  function applyState(oldState, newState) {
+    const wasActive = oldState !== 'off';
+    const isActive = newState !== 'off';
+    const directionChanged = wasActive && isActive && oldState !== newState;
+
+    if (!isActive) {
+      // 关闭：断开观察、清空队列、还原 DOM、清空状态
       observer.disconnect();
       queue.clear();
       scheduled = false;
       restoreAll();
+      clearAllState();
+    } else if (directionChanged) {
+      // 方向切换：必须还原 + 清空 state + 用新方向重扫
+      observer.disconnect();
+      queue.clear();
+      scheduled = false;
+      restoreAll();
+      clearAllState();
+      convert = converters[newState];
+      observer.observe(document.documentElement, OBSERVER_OPTIONS);
+      enqueueSubtree(document.documentElement);
+      scheduleIdle();
+    } else if (!wasActive && isActive) {
+      // 从关闭到开启（同方向）
+      convert = converters[newState];
+      observer.observe(document.documentElement, OBSERVER_OPTIONS);
+      enqueueSubtree(document.documentElement);
+      scheduleIdle();
     }
+    // off->off / 同状态: 无操作
   }
 
-  function setEnabled(v) {
-    enabled = v;
-    try { if (typeof GM_setValue === 'function') GM_setValue(STORAGE_KEY, v ? '1' : '0'); } catch (e) {}
-    applyEnabled(v);
+  function setState(newState) {
+    if (state === newState) return; // 防止 BroadcastChannel 回环
+    const oldState = state;
+    state = newState;
+    try { if (typeof GM_setValue === 'function') GM_setValue(STATE_KEY, newState); } catch (e) {}
+    applyState(oldState, newState);
     refreshMenu();
     if (channel) {
-      try { channel.postMessage({ type: 'zh-t2s-toggle', enabled: v }); } catch (e) {}
+      try { channel.postMessage({ type: 'zh-t2s-state', state: newState }); } catch (e) {}
     }
   }
 
-  // 同源 iframe 之间同步开关状态
+  // 同源 iframe 之间同步状态
   if (channel) {
     channel.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'zh-t2s-toggle' && e.data.enabled !== enabled) {
-        enabled = e.data.enabled;
-        applyEnabled(enabled);
-        refreshMenu();
+      if (e.data && e.data.type === 'zh-t2s-state' && e.data.state !== state) {
+        setState(e.data.state); // setState 开头会判等防回环
       }
     });
   }
 
   /* ============================================================
-   * 8. 油猴菜单项：点击扩展图标可见，显示当前状态并切换
+   * 8. 油猴菜单项：两个互斥项（繁→简 / 简→繁）
    * ============================================================
    * 仅顶层框架注册，避免 iframe 重复注册菜单项。
+   * 点击当前活跃方向项 -> 关闭；点击另一方向项 -> 切换方向并开启。
    * Tampermonkey 不支持动态修改菜单项标题，切换时先注销再重新注册。
    * ============================================================ */
-  let menuCmdId = null;
+  let menuCmdIds = [];
 
-  function menuCaption() {
-    return enabled ? '繁→简 转换：✅ 已开启（点击关闭）' : '繁→简 转换：⏸ 已关闭（点击开启）';
+  function menuCaptionT2S() {
+    return state === 't2s'
+      ? '繁→简 转换：✅ 开启中（点击关闭）'
+      : '繁→简 转换（点击开启）';
+  }
+  function menuCaptionS2T() {
+    return state === 's2t'
+      ? '简→繁 转换：✅ 开启中（点击关闭）'
+      : '简→繁 转换（点击开启）';
   }
 
   function refreshMenu() {
     if (typeof GM_registerMenuCommand !== 'function') return;
-    if (menuCmdId !== null && typeof GM_unregisterMenuCommand === 'function') {
-      try { GM_unregisterMenuCommand(menuCmdId); } catch (e) {}
-    }
+    // 先注销所有已注册项
+    menuCmdIds.forEach((id) => {
+      try { if (typeof GM_unregisterMenuCommand === 'function') GM_unregisterMenuCommand(id); } catch (e) {}
+    });
+    menuCmdIds = [];
     try {
-      menuCmdId = GM_registerMenuCommand(menuCaption(), () => setEnabled(!enabled), 't');
-    } catch (e) { menuCmdId = null; }
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionT2S(), () => {
+        setState(state === 't2s' ? 'off' : 't2s');
+      }, 't'));
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionS2T(), () => {
+        setState(state === 's2t' ? 'off' : 's2t');
+      }, 's'));
+    } catch (e) {}
   }
 
   function registerMenu() {
@@ -412,7 +468,8 @@
    * 9. 启动
    * ============================================================ */
   function start() {
-    if (enabled) {
+    if (state !== 'off') {
+      convert = converters[state];
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）

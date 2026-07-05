@@ -2,7 +2,27 @@
 
 本文件记录 zh-t2s 用户脚本的所有显著变更。
 
-格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## [2.0.0] - 2026-07-05
+
+### 新增
+
+- **简→繁方向支持**：新增 `converters.s2t`（OpenCC `s2t` 方向），与原有 `t2s` 共存。两个 converter 实例共享 opencc-js 模块级字典，内存增量可忽略。
+- **两个互斥菜单项**：油猴菜单同时显示 `繁→简` 与 `简→繁` 两项。点击当前活跃方向项则关闭；点击另一方向项则切换方向并开启。切换方向时先还原 DOM、清空所有状态 WeakMap，再用新方向重新扫描转换。
+- **状态广播同步**：BroadcastChannel 消息格式改为 `{ type: 'zh-t2s-state', state }`，同步三态状态到同源 iframe。
+
+### 变更
+
+- **脚本改名**：`繁转简 (zh-t2s)` → `繁简转换 (zh-t2s)`，反映双向能力。
+- **描述更新**：`@description` 三字段改为"在网页繁简中文之间双向转换"。
+- **状态模型重构**：`let enabled = true`（布尔）→ `let state = 't2s'`（三态 `'off' | 't2s' | 's2t'`）。`applyEnabled`/`setEnabled` 重写为 `applyState`/`setState`。
+- **WeakMap 改为 `let` 声明**：`textState`/`attrState`/`textOriginal`/`attrOriginal` 需支持清空重建，新增 `clearAllState()` 在方向切换时调用。
+- **菜单注册重构**：`menuCmdId` 单值改为 `menuCmdIds` 数组，`refreshMenu` 注销所有再重新注册两项。
+
+### 兼容
+
+- **旧版偏好迁移**：保留 GM 存储 key `zh-t2s-enabled`，启动时读到旧值 `'1'` 当 `t2s`、`'0'` 当 `off`，平滑升级。
 
 ## [1.2.0] - 2026-07-05
 
