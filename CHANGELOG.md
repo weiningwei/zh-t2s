@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.10] - 2026-07-05
+
+### 修复
+
+- **菜单注册容错**：`registerMenu` 中 `window.top !== window.self` 在 Tampermonkey 沙箱可能抛 SecurityError，改用 try/catch 包裹。`refreshMenu` 中每个 `GM_registerMenuCommand` 改为独立 try/catch，一项失败不影响其余项。
+
 ## [2.0.9] - 2026-07-05
 
 ### 修复

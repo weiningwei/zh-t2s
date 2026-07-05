@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.9
+// @version      2.0.10
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -626,49 +626,58 @@
   }
 
   function refreshMenu() {
-    if (typeof GM_registerMenuCommand !== 'function') return;
+    if (typeof GM_registerMenuCommand !== 'function') {
+      console.warn('[zh-t2s] GM_registerMenuCommand 不可用，菜单禁用');
+      return;
+    }
     // 先注销所有已注册项
     menuCmdIds.forEach((id) => {
       try { if (typeof GM_unregisterMenuCommand === 'function') GM_unregisterMenuCommand(id); } catch (e) {}
     });
     menuCmdIds = [];
-    try {
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionT2S(), () => {
-        setState(state === 't2s' ? 'off' : 't2s');
-      }));
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionS2T(), () => {
-        setState(state === 's2t' ? 'off' : 's2t');
-      }));
-      // 第三个项：只读统计，点击重新注册以刷新标题
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionStats(), () => {
-        refreshMenu();
-      }));
-      // 第四、五项：快捷键配置
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionConfigT2S(), () => {
-        capturingShortcut = 't2s';
-        refreshMenu(); // 立即更新标题提示用户按键
-      }));
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionConfigS2T(), () => {
-        capturingShortcut = 's2t';
-        refreshMenu();
-      }));
-      // 第六项：当前页状态（只读，点击刷新）
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionStatus(), () => {
-        refreshMenu();
-      }));
-      // 第七项：加入/移出白名单
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionToggleWhitelist(), () => {
-        toggleWhitelist();
-      }));
-      // 第八项：清空白名单
-      menuCmdIds.push(GM_registerMenuCommand(menuCaptionClearWhitelist(), () => {
-        clearWhitelist();
-      }));
-    } catch (e) {}
+    function reg(caption, fn) {
+      try {
+        const id = GM_registerMenuCommand(caption, fn);
+        if (id != null) menuCmdIds.push(id);
+      } catch (e) {
+        console.warn('[zh-t2s] 菜单注册失败:', caption, e);
+      }
+    }
+    reg(menuCaptionT2S(), () => {
+      setState(state === 't2s' ? 'off' : 't2s');
+    });
+    reg(menuCaptionS2T(), () => {
+      setState(state === 's2t' ? 'off' : 's2t');
+    });
+    // 第三个项：只读统计，点击重新注册以刷新标题
+    reg(menuCaptionStats(), () => {
+      refreshMenu();
+    });
+    // 第四、五项：快捷键配置
+    reg(menuCaptionConfigT2S(), () => {
+      capturingShortcut = 't2s';
+      refreshMenu(); // 立即更新标题提示用户按键
+    });
+    reg(menuCaptionConfigS2T(), () => {
+      capturingShortcut = 's2t';
+      refreshMenu();
+    });
+    // 第六项：当前页状态（只读，点击刷新）
+    reg(menuCaptionStatus(), () => {
+      refreshMenu();
+    });
+    // 第七项：加入/移出白名单
+    reg(menuCaptionToggleWhitelist(), () => {
+      toggleWhitelist();
+    });
+    // 第八项：清空白名单
+    reg(menuCaptionClearWhitelist(), () => {
+      clearWhitelist();
+    });
   }
 
   function registerMenu() {
-    if (window.top !== window.self) return; // 仅顶层框架注册
+    try { if (window.top !== window.self) return; } catch (e) { /* x-origin iframe */ }
     refreshMenu();
   }
 
