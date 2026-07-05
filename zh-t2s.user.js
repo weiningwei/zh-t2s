@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.2
+// @version      2.0.3
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -247,6 +247,8 @@
    * ============================================================ */
   const hasRIC = typeof window.requestIdleCallback === 'function';
   let scheduled = false;
+  let lastMenuRefresh = 0;              // 菜单刷新节流：避免动态内容持续到来时频繁重注册
+  const MENU_REFRESH_INTERVAL = 1000;   // 最少间隔 1 秒
 
   function scheduleIdle() {
     if (scheduled) return;
@@ -285,6 +287,15 @@
         if (!SKIP_TAGS.has(node.nodeName)) convertAttributes(node);
       }
       processed++;
+    }
+    // 队列处理完毕：刷新菜单让统计项显示最新数据
+    // 节流 1 秒，避免动态内容持续到来时频繁注销+重注册菜单项
+    if (processed > 0) {
+      const now = Date.now();
+      if (now - lastMenuRefresh >= MENU_REFRESH_INTERVAL) {
+        lastMenuRefresh = now;
+        refreshMenu();
+      }
     }
   }
 
