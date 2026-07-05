@@ -3,7 +3,7 @@
 // @name:zh-CN   繁转简 (zh-t2s)
 // @name:zh-TW   繁轉簡 (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      1.1.0
+// @version      1.2.0
 // @description       基于 OpenCC 自动将网页繁体中文转为简体，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理。
 // @description:zh-CN 基于 OpenCC 自动将网页繁体中文转为简体，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理。
 // @description:zh-TW 基於 OpenCC 自動將網頁繁體中文轉為簡體，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理。
