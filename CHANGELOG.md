@@ -4,11 +4,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [2.0.7] - 2026-07-05
+## [2.0.8] - 2026-07-05
 
 ### 修复
 
-- **菜单不显示**：`GM_registerMenuCommand` 的 accessKey 参数仅接受单字符，白名单菜单项使用了 `'s2'`/`'cw'` 等多字符 key，导致注册异常、全部菜单项丢失。已移除所有 accessKey 参数。
+- **菜单不显示**：`GM_registerMenuCommand` 的 accessKey 参数仅接受单字符，已有项 `'c1'`/`'c2'` 及新增项 `'s2'`/`'cw'` 等多字符 key 导致注册异常，全部菜单项丢失。已移除所有 accessKey 参数。
+
+## [2.0.7] - 2026-07-05
 
 ### 新增
 
