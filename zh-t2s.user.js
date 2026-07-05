@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.4
+// @version      2.0.5
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -501,30 +501,26 @@
 
   function menuCaptionT2S() {
     const sc = formatShortcut(shortcutT2S);
-    return state === 't2s'
-      ? `繁→简 转换：✅ 开启中（点击关闭）[${sc}]`
-      : `繁→简 转换（点击开启）[${sc}]`;
+    return state === 't2s' ? `✅ 繁→简 [${sc}]` : `⏸ 繁→简 [${sc}]`;
   }
   function menuCaptionS2T() {
     const sc = formatShortcut(shortcutS2T);
-    return state === 's2t'
-      ? `简→繁 转换：✅ 开启中（点击关闭）[${sc}]`
-      : `简→繁 转换（点击开启）[${sc}]`;
+    return state === 's2t' ? `✅ 简→繁 [${sc}]` : `⏸ 简→繁 [${sc}]`;
   }
   function menuCaptionStats() {
     // 耗时显示：小于 10ms 显示 1 位小数，否则取整
     const t = stats.time < 10 ? stats.time.toFixed(1) : Math.round(stats.time);
-    return `📊 已转 ${stats.chars} 字 / ${t}ms（点击刷新）`;
+    return `📊 ${stats.chars}字 / ${t}ms`;
   }
   function menuCaptionConfigT2S() {
     return capturingShortcut === 't2s'
-      ? '⌨️ 繁→简：按下新快捷键（Esc 取消）...'
-      : `⚙️ 繁→简快捷键：${formatShortcut(shortcutT2S)}（点击配置）`;
+      ? '⌨️ 繁→简：按下新键（Esc 取消）'
+      : `⚙️ 繁→简键：${formatShortcut(shortcutT2S)}`;
   }
   function menuCaptionConfigS2T() {
     return capturingShortcut === 's2t'
-      ? '⌨️ 简→繁：按下新快捷键（Esc 取消）...'
-      : `⚙️ 简→繁快捷键：${formatShortcut(shortcutS2T)}（点击配置）`;
+      ? '⌨️ 简→繁：按下新键（Esc 取消）'
+      : `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
   }
 
   function refreshMenu() {
