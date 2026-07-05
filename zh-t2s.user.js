@@ -634,35 +634,35 @@
     try {
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionT2S(), () => {
         setState(state === 't2s' ? 'off' : 't2s');
-      }, 't'));
+      }));
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionS2T(), () => {
         setState(state === 's2t' ? 'off' : 's2t');
-      }, 's'));
+      }));
       // 第三个项：只读统计，点击重新注册以刷新标题
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionStats(), () => {
         refreshMenu();
-      }, 'r'));
+      }));
       // 第四、五项：快捷键配置
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionConfigT2S(), () => {
         capturingShortcut = 't2s';
         refreshMenu(); // 立即更新标题提示用户按键
-      }, 'c1'));
+      }));
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionConfigS2T(), () => {
         capturingShortcut = 's2t';
         refreshMenu();
-      }, 'c2'));
+      }));
       // 第六项：当前页状态（只读，点击刷新）
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionStatus(), () => {
         refreshMenu();
-      }, 's2'));
+      }));
       // 第七项：加入/移出白名单
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionToggleWhitelist(), () => {
         toggleWhitelist();
-      }, 'w'));
+      }));
       // 第八项：清空白名单
       menuCmdIds.push(GM_registerMenuCommand(menuCaptionClearWhitelist(), () => {
         clearWhitelist();
-      }, 'cw'));
+      }));
     } catch (e) {}
   }
 
