@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.12] - 2026-07-05
+
+### 修复
+
+- **iframe 重复注册菜单**：`registerMenu` 的跨域 iframe catch 分支未 `return`，导致 `window.top` 抛 SecurityError 时穿透到 `refreshMenu()`，iframe 额外注册一套菜单项，多层 iframe 时菜单项成倍重复。
+
 ## [2.0.11] - 2026-07-05
 
 ### 修复
