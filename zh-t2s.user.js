@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         繁体中文自动转简体中文 (zh-t2s)
-// @name:zh-CN   繁体中文自动转简体中文
-// @name:zh-TW   繁體中文自動轉簡體中文
+// @name         繁转简 (zh-t2s)
+// @name:zh-CN   繁转简 (zh-t2s)
+// @name:zh-TW   繁轉簡 (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
 // @version      1.1.0
-// @description       自动将网页中的繁体中文转换为简体中文，覆盖正文、标题、按钮、表单提示等所有可见文本；基于 OpenCC 实现上下文感知的高质量繁简转换，正确处理一对多映射字词；支持动态加载内容，分批处理不阻塞渲染。
-// @description:zh-CN 自动将网页中的繁体中文转换为简体中文，覆盖正文、标题、按钮、表单提示等所有可见文本；基于 OpenCC 实现上下文感知的高质量繁简转换，正确处理一对多映射字词；支持动态加载内容，分批处理不阻塞渲染。
-// @description:zh-TW 自動將網頁中的繁體中文轉換為簡體中文，覆蓋正文、標題、按鈕、表單提示等所有可見文本；基於 OpenCC 實現上下文感知的高品質繁簡轉換，正確處理一對多映射字詞；支援動態載入內容，分批處理不阻塞渲染。
+// @description       基于 OpenCC 自动将网页繁体中文转为简体，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理。
+// @description:zh-CN 基于 OpenCC 自动将网页繁体中文转为简体，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理。
+// @description:zh-TW 基於 OpenCC 自動將網頁繁體中文轉為簡體，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理。
 // @author       weiningwei
 // @match        *://*/*
 // @require      https://cdn.jsdelivr.net/npm/opencc-js@1.4.0/dist/umd/full.js
