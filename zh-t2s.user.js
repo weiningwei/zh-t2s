@@ -140,6 +140,16 @@
            e.metaKey === shortcut.meta;
   }
 
+  function formatShortcut(s) {
+    const parts = [];
+    if (s.ctrl) parts.push('Ctrl');
+    if (s.alt) parts.push('Alt');
+    if (s.shift) parts.push('Shift');
+    if (s.meta) parts.push('Meta');
+    parts.push(s.key);
+    return parts.join('+');
+  }
+
   // 浏览器/系统常见快捷键黑名单（Ctrl+字母组合），配置时警告
   const BROWSER_SHORTCUT_CONFLICTS = {
     'Ctrl+S': '保存',
