@@ -4,6 +4,20 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.7] - 2026-07-05
+
+### 新增
+
+- **白名单（不转换名单）**：按域名排除特定站点不做任何转换。
+  - 数据存 `GM_setValue('zh-t2s-whitelist', [hostname, ...])`，字符串数组
+  - 启动时计算 `isWhitelisted = whitelist.includes(location.hostname)`，白名单页不启动 observer
+  - 菜单新增 3 项：
+    - `🟢 当前页：繁→简 转换中` / `⚪ 当前页：已忽略` — 只读状态项
+    - `➕ 加入白名单（域名）` / `➖ 移出白名单（域名）` — 一键操作，自动刷新生效
+    - `🗑 清空白名单（共 N 项）` — 清空所有，自动刷新生效
+  - 白名单页快捷键 F8/F9 不响应（`if (isWhitelisted) return`）
+  - 匹配规则：按 `location.hostname` 精确匹配，不关心路径
+
 ## [2.0.6] - 2026-07-05
 
 ### 新增

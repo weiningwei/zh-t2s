@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.6
+// @version      2.0.7
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -189,6 +189,28 @@
       return `浏览器「${BROWSER_SHORTCUT_CONFLICTS[name]}」快捷键`;
     }
     return null;
+  }
+
+  /* ============================================================
+   * 2.3 白名单（不转换名单，按域名匹配）
+   * ============================================================
+   * 名单中的域名不做任何转换，用于排除特定站点。
+   * 数据存 GM_setValue（字符串数组），菜单可加入/移出/清空。
+   * ============================================================ */
+  const WHITELIST_KEY = 'zh-t2s-whitelist';
+  let whitelist = []; // 域名数组，如 ['ptt.cc', 'youtube.com']
+  try {
+    if (typeof GM_getValue === 'function') {
+      const saved = GM_getValue(WHITELIST_KEY, []);
+      if (Array.isArray(saved)) whitelist = saved;
+    }
+  } catch (e) {}
+
+  const currentHost = location.hostname;
+  let isWhitelisted = whitelist.includes(currentHost); // let：移出白名单后会重新计算
+
+  function saveWhitelist() {
+    try { if (typeof GM_setValue === 'function') GM_setValue(WHITELIST_KEY, whitelist); } catch (e) {}
   }
 
   /* ============================================================
@@ -568,6 +590,39 @@
     }
     return `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
   }
+  function menuCaptionStatus() {
+    if (isWhitelisted) return `⚪ 当前页：已忽略（${currentHost}）`;
+    if (state === 'off') return `⚪ 当前页：已关闭`;
+    const dir = state === 't2s' ? '繁→简' : '简→繁';
+    return `🟢 当前页：${dir} 转换中`;
+  }
+  function menuCaptionToggleWhitelist() {
+    return isWhitelisted
+      ? `➖ 移出白名单（${currentHost}）`
+      : `➕ 加入白名单（${currentHost}）`;
+  }
+  function menuCaptionClearWhitelist() {
+    return `🗑 清空白名单（共 ${whitelist.length} 项）`;
+  }
+
+  /** 加入/移出白名单（当前域名），保存后刷新页面生效 */
+  function toggleWhitelist() {
+    if (isWhitelisted) {
+      whitelist = whitelist.filter((h) => h !== currentHost);
+    } else {
+      whitelist.push(currentHost);
+    }
+    saveWhitelist();
+    location.reload(); // 白名单变化必须刷新，重新走 start 判断
+  }
+
+  /** 清空白名单，保存后刷新页面生效 */
+  function clearWhitelist() {
+    if (whitelist.length === 0) return;
+    whitelist = [];
+    saveWhitelist();
+    location.reload();
+  }
 
   function refreshMenu() {
     if (typeof GM_registerMenuCommand !== 'function') return;
@@ -596,6 +651,18 @@
         capturingShortcut = 's2t';
         refreshMenu();
       }, 'c2'));
+      // 第六项：当前页状态（只读，点击刷新）
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionStatus(), () => {
+        refreshMenu();
+      }, 's2'));
+      // 第七项：加入/移出白名单
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionToggleWhitelist(), () => {
+        toggleWhitelist();
+      }, 'w'));
+      // 第八项：清空白名单
+      menuCmdIds.push(GM_registerMenuCommand(menuCaptionClearWhitelist(), () => {
+        clearWhitelist();
+      }, 'cw'));
     } catch (e) {}
   }
 
@@ -659,8 +726,9 @@
       return;
     }
 
-    // 正常模式：表单聚焦时跳过
+    // 正常模式：表单聚焦时跳过；白名单页跳过
     if (inForm) return;
+    if (isWhitelisted) return;
 
     if (matchShortcut(e, shortcutT2S)) {
       e.preventDefault();
@@ -675,7 +743,7 @@
    * 9. 启动
    * ============================================================ */
   function start() {
-    if (state !== 'off') {
+    if (state !== 'off' && !isWhitelisted) {   // 白名单中的域名不启动转换
       convert = converters[state];
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
@@ -683,7 +751,7 @@
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     }
-    registerMenu(); // 无论开关状态都注册菜单，供用户切换
+    registerMenu(); // 无论白名单/关闭状态都注册菜单，供用户管理
   }
 
   if (document.readyState === 'loading') {

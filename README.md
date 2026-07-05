@@ -5,7 +5,7 @@
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安装-670000?logo=greasyfork&logoColor=white)](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s)
 [![GitHub](https://img.shields.io/badge/GitHub-源码-181717?logo=github&logoColor=white)](https://github.com/weiningwei/zh-t2s)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.6-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.7-green)](CHANGELOG.md)
 
 基于 [opencc-js](https://github.com/nk2028/opencc-js)（纯 JavaScript 版 OpenCC）实现，内置 mmseg 短语分词，正确处理一对多映射（如 `乾隆` 中的 `乾` 不被误转为 `干`；简转繁时 `发展` 用 `發`、`头发` 用 `髮`）。默认方向为繁→简，可通过油猴菜单切换为简→繁。
 
@@ -28,7 +28,8 @@
 - **编辑友好**：跳过当前聚焦的 `contenteditable` 区域，避免打断用户输入。
 - **一键开关 + 方向切换**：油猴菜单两个互斥项，状态全局持久化，切换方向时还原原文并用新方向重转。
 - **转换统计**：菜单显示当前页面已转换字符数与 OpenCC 耗时，会话级统计，切换方向时重置。
-- **快捷键支持**：默认 F8 开关繁→简、F9 开关简→繁，可通过菜单自定义配置；表单聚焦时不响应。
+- **快捷键支持**：默认 F8 开关繁→简、F9 开关简→繁，可通过菜单自定义配置；表单聚焦时不响应；配置时检测与浏览器/另一方向快捷键冲突。
+- **白名单**：按域名排除特定站点不做转换，菜单可一键加入/移出/清空；菜单状态项显示当前页是否转换。
 
 ## 安装
 
@@ -93,6 +94,20 @@
 **配置方式**：点击油猴菜单中的 `⚙️ 繁→简快捷键：F8（点击配置）` 项 → 标题变为 `⌨️ 按下新快捷键...` → 按下任意键组合（如 `Ctrl+Shift+Z`）即完成配置。按 `Esc` 取消。
 
 **表单跳过**：在 `<input>` / `<textarea>` / `contenteditable` 聚焦时，快捷键不响应，避免打断输入。配置模式下不受此限制。
+
+### 白名单
+
+白名单中的域名不做任何转换，用于排除特定站点。
+
+**操作方式**（油猴菜单）：
+
+- `➕ 加入白名单（当前域名）` — 一键将当前页域名加入名单，自动刷新生效
+- `➖ 移出白名单（当前域名）` — 从名单移除当前域名，自动刷新恢复转换
+- `🗑 清空白名单（共 N 项）` — 清空所有白名单，自动刷新生效
+
+**状态查看**：菜单中的 `🟢 当前页：繁→简 转换中` / `⚪ 当前页：已忽略` 显示当前页转换状态。
+
+**匹配规则**：按 `location.hostname` 精确匹配，不关心路径。如 `zh.wikipedia.org` 与 `en.wikipedia.org` 视为不同域名。
 
 ## 工作原理
 
