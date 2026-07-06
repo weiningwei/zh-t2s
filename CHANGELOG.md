@@ -4,6 +4,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.1.0] - 2026-07-06
+
+### 新增
+
+- **页面内浮动状态按钮**：右下角常驻胶囊按钮，实时显示当前转换状态（🟢繁→简 / 🟢简→繁 / ⚪已关闭 / ⚪已忽略 / ⚪未加载）；点击展开面板可一键切换方向、关闭或隐藏按钮。按钮默认开启，可在油猴菜单「🙈 隐藏浮动按钮」关闭（状态持久化至 `zh-t2s-floatbtn`）；按钮带 `ignore-opencc` 类且用内联样式隔离页面 CSS，不会被转换也不会破坏页面布局。
+
+### 修复
+
+- **`convertAttributes` 未识别 `.ignore-opencc`**：此前仅文本节点跳过该类，带 `placeholder`/`title`/`alt`/`aria-label` 的元素属性仍可能被转换。现补充祖先链 `closest('.ignore-opencc')` 守卫，与 README 声明一致（同时保护浮动按钮自身属性）。
+
 ## [2.0.15] - 2026-07-05
 
 ### 优化

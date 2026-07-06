@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.15
+// @version      2.1.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -79,6 +79,12 @@
   // 需要转换的可见文本属性
   const CONVERTIBLE_ATTRS = ['placeholder', 'title', 'alt', 'aria-label'];
 
+  // 浮动状态按钮（页面内可见开关，默认显示，可在油猴菜单关闭）
+  // 仅顶层框架创建；按钮自身带 .ignore-opencc，且用内联样式隔离页面 CSS。
+  const FLOAT_BTN_KEY = 'zh-t2s-floatbtn';
+  const FLOAT_BTN_DEFAULT = true; // 默认显示；用户可在油猴菜单关闭
+  let floatBtnEnabled = FLOAT_BTN_DEFAULT;
+
   /* ============================================================
    * 2.1 状态模型（持久化到 GM 存储，全局共享）
    * ============================================================
@@ -126,6 +132,14 @@
       if (s1 && typeof s1 === 'object' && s1.key) shortcutT2S = s1;
       const s2 = GM_getValue(SHORTCUT_KEY_S2T, null);
       if (s2 && typeof s2 === 'object' && s2.key) shortcutS2T = s2;
+    }
+  } catch (e) {}
+
+  // 浮动按钮开关（默认开启，用户可在菜单隐藏）
+  try {
+    if (typeof GM_getValue === 'function') {
+      const fb = GM_getValue(FLOAT_BTN_KEY, null);
+      if (typeof fb === 'boolean') floatBtnEnabled = fb;
     }
   } catch (e) {}
 
@@ -297,6 +311,8 @@
   }
 
   function convertAttributes(el) {
+    // .ignore-opencc 子树整体跳过（与 shouldSkipText 的约定一致，README 也已声明）
+    if (el.closest && el.closest('.ignore-opencc')) return;
     let map = attrState.get(el);
     if (!map) { map = new Map(); attrState.set(el, map); }
     let origMap = attrOriginal.get(el);
@@ -699,12 +715,19 @@
     reg(menuCaptionClearWhitelist(), () => {
       clearWhitelist();
     });
+    // 第九项：浮动按钮显示/隐藏（始终注册，便于重新开启）
+    reg(floatBtnEnabled ? '🙈 隐藏浮动按钮' : '👁 显示浮动按钮', () => {
+      setFloatBtnEnabled(!floatBtnEnabled);
+    });
+    // 同步页面内浮动按钮的展示与文案
+    updateFloatBtn();
   }
 
   function registerMenu() {
     // @noframes 保证仅顶层执行，此处防御性检查兼容不支持 @noframes 的脚本管理器
     try { if (window.top !== window.self) return; } catch (e) { return; }
     refreshMenu();
+    ensureFloatBtn(); // 顶层框架创建浮动按钮（若已启用）
   }
 
   /* ============================================================
@@ -774,6 +797,121 @@
       setState(state === 's2t' ? 'off' : 's2t');
     }
   }, true);
+
+  /* ============================================================
+   * 8.3 浮动状态按钮（页面内可见开关，支持在菜单关闭）
+   * ============================================================
+   * 默认显示于右下角，展示当前转换状态（🟢繁→简 / 🟢简→繁 / ⚪关 / ⚪忽略 / ⚪未加载）。
+   * 点击胶囊展开面板：可切换方向、关闭、或隐藏本按钮。
+   * 按钮自身带 .ignore-opencc（文本/属性均不被转换），且用内联样式隔离页面 CSS。
+   * 仅顶层框架创建（与菜单一致）。
+   * ============================================================ */
+  let floatBtn = null;        // 主胶囊按钮
+  let floatPanel = null;      // 展开面板
+  let floatPanelOpen = false;
+
+  function floatBtnStateText() {
+    if (!hasOpenCC) return { icon: '⚪', label: '未加载', on: false };
+    if (isWhitelisted) return { icon: '⚪', label: '已忽略', on: false };
+    if (state === 'off') return { icon: '⚪', label: '已关闭', on: false };
+    return state === 't2s'
+      ? { icon: '🟢', label: '繁→简', on: true }
+      : { icon: '🟢', label: '简→繁', on: true };
+  }
+
+  function ensureFloatBtn() {
+    if (!floatBtnEnabled) return;
+    if (window.top !== window.self) return; // 仅顶层框架
+    if (floatBtn) { updateFloatBtn(); return; }
+    floatBtn = document.createElement('div');
+    floatBtn.className = 'ignore-opencc zh-t2s-floatbtn';
+    Object.assign(floatBtn.style, {
+      position: 'fixed', right: '12px', bottom: '12px', zIndex: '2147483646',
+      display: 'flex', alignItems: 'center', gap: '4px',
+      padding: '6px 10px', borderRadius: '16px', cursor: 'pointer',
+      font: '12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
+      color: '#fff', background: 'rgba(40,130,255,.92)',
+      boxShadow: '0 2px 8px rgba(0,0,0,.25)', userSelect: 'none',
+      pointerEvents: 'auto'
+    });
+    floatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFloatPanel();
+    });
+    document.documentElement.appendChild(floatBtn);
+    updateFloatBtn();
+  }
+
+  function updateFloatBtn() {
+    if (!floatBtn) return;
+    const s = floatBtnStateText();
+    floatBtn.textContent = s.icon + ' ' + s.label;
+    floatBtn.style.background = s.on ? 'rgba(40,130,255,.92)' : 'rgba(120,120,120,.9)';
+  }
+
+  function closeFloatPanel() {
+    floatPanelOpen = false;
+    if (floatPanel) { floatPanel.remove(); floatPanel = null; }
+    document.removeEventListener('click', onDocClickCloseFloat, true);
+  }
+
+  function onDocClickCloseFloat(e) {
+    if (floatPanel && !floatPanel.contains(e.target) && e.target !== floatBtn) {
+      closeFloatPanel();
+    }
+  }
+
+  function openFloatPanel() {
+    floatPanelOpen = true;
+    floatPanel = document.createElement('div');
+    floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
+    Object.assign(floatPanel.style, {
+      position: 'fixed', right: '12px', bottom: '48px', zIndex: '2147483646',
+      display: 'flex', flexDirection: 'column', minWidth: '148px',
+      padding: '6px', borderRadius: '10px', cursor: 'default',
+      font: '12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
+      color: '#222', background: '#fff',
+      boxShadow: '0 4px 16px rgba(0,0,0,.3)', userSelect: 'none', pointerEvents: 'auto'
+    });
+    const mk = (label, onClick) => {
+      const b = document.createElement('div');
+      b.textContent = label;
+      Object.assign(b.style, {
+        padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap'
+      });
+      b.addEventListener('mouseenter', () => { b.style.background = '#eef3ff'; });
+      b.addEventListener('mouseleave', () => { b.style.background = 'transparent'; });
+      b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+      return b;
+    };
+    floatPanel.appendChild(mk('✅ 繁→简', () => { setState(state === 't2s' ? 'off' : 't2s'); closeFloatPanel(); }));
+    floatPanel.appendChild(mk('✅ 简→繁', () => { setState(state === 's2t' ? 'off' : 's2t'); closeFloatPanel(); }));
+    const statusLine = mk('🟢 当前：' + floatBtnStateText().label, () => {});
+    statusLine.style.color = '#888';
+    statusLine.style.cursor = 'default';
+    floatPanel.appendChild(statusLine);
+    floatPanel.appendChild(mk('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
+    document.documentElement.appendChild(floatPanel);
+    // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
+    setTimeout(() => document.addEventListener('click', onDocClickCloseFloat, true), 0);
+  }
+
+  function toggleFloatPanel() {
+    if (floatPanelOpen) closeFloatPanel();
+    else openFloatPanel();
+  }
+
+  function setFloatBtnEnabled(on) {
+    floatBtnEnabled = !!on;
+    try { if (typeof GM_setValue === 'function') GM_setValue(FLOAT_BTN_KEY, floatBtnEnabled); } catch (e) {}
+    if (floatBtnEnabled) {
+      ensureFloatBtn();
+    } else {
+      closeFloatPanel();
+      if (floatBtn) { floatBtn.remove(); floatBtn = null; }
+    }
+    refreshMenu(); // 同步菜单项文案（显示/隐藏）
+  }
 
   /* ============================================================
    * 9. 启动
