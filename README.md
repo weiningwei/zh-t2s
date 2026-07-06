@@ -22,14 +22,15 @@
 - **上下文感知**：采用 OpenCC 词典 + 短语分词，正确解决一对多映射，仅做字形繁简转换，不改变地区用词。
 - **动态内容**：通过 `MutationObserver` 监听 DOM 变化，自动转换异步加载或动态插入的节点。
 - **不阻塞渲染**：使用 `requestIdleCallback` 分批处理，每帧最多处理 300 个节点，空闲时间耗尽即让出主线程。
-- **性能优化**：CJK 预检跳过纯 ASCII 文本；`querySelectorAll` 原生查询属性元素；状态记录避免重复转换。
-- **安全跳过**：不修改 `script` / `style` / `noscript` / `textarea` / `input` / `template` / `iframe` 等元素的内容，防止破坏页面功能。
-- **无死循环**：通过状态记录区分"自身写入"与"外部写入"，避免转换回写触发观察者导致的无限循环。
+- **性能优化**：CJK 预检跳过纯 ASCII 文本；`querySelectorAll` 原生查询属性元素；元素名 Set 快速路径（O(1)）绕过 `closest()` 祖先链上溯；观察者回调层预检自写回变更，避免无效入队。
+- **安全跳过**：不修改 `script` / `style` / `noscript` / `textarea` / `input` / `template` / `iframe` / `object` / `embed` 等元素的内容，防止破坏页面功能；`@noframes` 避免向无关 iframe 注入脚本。
+- **无死循环**：观察者回调中用 `WeakMap` 状态预检自写回变更，匹配则跳过不入队，避免转换写回→触发观察者→再次转换的循环。
 - **编辑友好**：跳过当前聚焦的 `contenteditable` 区域，避免打断用户输入。
-- **一键开关 + 方向切换**：油猴菜单两个互斥项，状态全局持久化，切换方向时还原原文并用新方向重转。
-- **转换统计**：菜单显示当前页面已转换字符数与 OpenCC 耗时，会话级统计，切换方向时重置。
-- **快捷键支持**：默认 F8 开关繁→简、F9 开关简→繁，可通过菜单自定义配置；表单聚焦时不响应；配置时检测与浏览器/另一方向快捷键冲突。
-- **白名单**：按域名排除特定站点不做转换，菜单可一键加入/移出/清空；菜单状态项显示当前页是否转换。
+- **一键开关 + 方向切换**：油猴菜单两个互斥项，状态全局持久化，切换方向时先还原原文再用新方向重转。
+- **转换统计**：菜单显示当前页面已转换字符数与 OpenCC 耗时（会话级统计，方向切换时重置）。
+- **快捷键支持**：默认 F8 开关繁→简、F9 开关简→繁，可通过菜单自定义配置；表单聚焦时不响应；配置时自动检测与浏览器/另一方向快捷键冲突。
+- **白名单**：按域名排除特定站点不做转换，菜单可一键加入/移出/清空。
+- **容错设计**：即使 opencc-js CDN 加载失败，菜单仍可正常注册，方便管理白名单/快捷键。
 
 ## 安装
 
@@ -114,13 +115,14 @@
 | 模块 | 说明 |
 | --- | --- |
 | 转换器 | 按当前方向选择 `converters.t2s` 或 `converters.s2t` |
-| 初始扫描 | `TreeWalker` 收集文本节点；`querySelectorAll` 收集属性元素 |
+| 初始扫描 | `TreeWalker` 遍历文本节点（父元素名 Set O(1) 快检跳过）；`querySelectorAll` 原生收集属性元素 |
 | CJK 预检 | `HAS_CJK` 正则跳过非中文文本，避免无谓的 OpenCC 调用 |
 | 分批调度 | `requestIdleCallback`（兜底 `setTimeout`），每帧最多 `CHUNK_SIZE=300` 个节点 |
 | 动态内容 | `MutationObserver` 监听 `childList` / `characterData` / 可转换属性 |
-| 死循环防护 | `WeakMap` 记录每个节点最近一次写入值，相同则跳过 |
-| 开关还原 | `WeakMap` 记录原始值，关闭时 TreeWalker 遍历还原 |
+| 死循环防护 | Observer 回调层用 `WeakMap` 预检自写回变更（`textState` / `attrState`），匹配则直接跳过不入队 |
+| 开关还原 | 关闭或切换方向时 TreeWalker 遍历 DOM，按 `WeakMap` 记录的原始值还原 |
 | 忽略元素 | `script,style,noscript,textarea,input,template,xmp,plaintext,iframe,object,embed,.ignore-opencc` |
+| iframe 隔离 | `@noframes` 元数据 + JS 防御性检测，防止在广告/跟踪 iframe 中重复运行 |
 
 ## 配置
 
@@ -132,7 +134,7 @@ const CHUNK_SIZE   = 300;  // 每个空闲帧最多处理的节点数
 ```
 
 - **限定站点**：修改元数据 `@match`，例如 `@match *://*.wikipedia.org/*`。
-- **不在 iframe 中运行**：在元数据中添加 `@noframes`。
+- **恢复 iframe 注入**：如需在 iframe 中也做转换，可去掉元数据中的 `@noframes`（默认已启用，防止无关广告/跟踪 iframe 中运行）。
 
 ## 许可证
 
