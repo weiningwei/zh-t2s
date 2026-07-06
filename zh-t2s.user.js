@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.4.0
+// @version      2.4.1
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -96,14 +96,18 @@
    * 兼容旧版：旧 key 存 '1'/'0'，启动时自动迁移为新三态。
    * ============================================================ */
   const STATE_KEY = 'zh-t2s-enabled'; // 保留 key，避免旧用户偏好丢失
+  const LAST_DIR_KEY = 'zh-t2s-lastdir'; // 关闭前方向，跨刷新沿用
   let state = 't2s'; // 'off' | 't2s' | 's2t'
+  let lastDirection = 't2s'; // 关闭前最后使用的方向，再次开启时沿用
   try {
     if (typeof GM_getValue === 'function') {
       const saved = GM_getValue(STATE_KEY, 't2s');
       if (saved === 'off') state = 'off';        // 新版关闭
       else if (saved === '0') state = 'off';     // 旧版关闭值
-      else if (saved === 's2t') state = 's2t';   // 简→繁
+      else if (saved === 's2t') { state = 's2t'; lastDirection = 's2t'; } // 简→繁
       else state = 't2s';                         // 't2s' / '1' / 未知值 → 默认繁→简
+      const ld = GM_getValue(LAST_DIR_KEY, null);
+      if (ld === 's2t' || ld === 't2s') lastDirection = ld;
     }
   } catch (e) { /* 读取失败保持默认开启 */ }
 
@@ -582,7 +586,13 @@
     if (state === newState) return; // 防止 BroadcastChannel 回环
     const oldState = state;
     state = newState;
-    try { if (typeof GM_setValue === 'function') GM_setValue(STATE_KEY, newState); } catch (e) {}
+    if (newState !== 'off') lastDirection = newState; // 记住最后使用的方向，供再次开启沿用
+    try {
+      if (typeof GM_setValue === 'function') {
+        GM_setValue(STATE_KEY, newState);
+        if (newState !== 'off') GM_setValue(LAST_DIR_KEY, newState);
+      }
+    } catch (e) {}
     applyState(oldState, newState);
     refreshMenu();
     if (channel) {
@@ -827,6 +837,8 @@
       '.zh-t2s-row.muted{color:#8a93a3;}',
       '.zh-t2s-row.danger{color:#e5484d;}',
       '.zh-t2s-row.danger:hover{background:#fdeced;}',
+      '.zh-t2s-row.primary{background:linear-gradient(135deg,#5b9bff,#2f6bff);color:#fff;font-weight:600;}',
+      '.zh-t2s-row.primary:hover{background:linear-gradient(135deg,#6ba6ff,#3f78ff);}',
       '.zh-t2s-seg{flex:1;text-align:center;padding:8px 0;cursor:pointer;border-radius:8px;color:#4a5160;',
       'transition:background .15s ease,color .15s ease;font-size:12px;}',
       '.zh-t2s-seg:hover{background:#f0f4ff;}',
@@ -868,7 +880,7 @@
     floatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (dragJustMoved) { dragJustMoved = false; return; } // 拖动结束的误触 click，吞掉
-      toggleFloatPanel();
+      toggleFloatPanel(); // 胶囊点击 = 展开/收起设置面板
     });
     floatBtn.addEventListener('pointerdown', onFloatPointerDown);
     document.documentElement.appendChild(floatBtn);
@@ -942,8 +954,9 @@
   function floatPanelRow(label, onClick, opts) {
     opts = opts || {};
     const b = document.createElement('div');
-    b.className = 'zh-t2s-row' + (opts.muted ? ' muted' : '') + (opts.danger ? ' danger' : '');
+    b.className = 'zh-t2s-row' + (opts.muted ? ' muted' : '') + (opts.danger ? ' danger' : '') + (opts.primary ? ' primary' : '');
     b.textContent = label;
+    if (opts.primary) b.style.textAlign = 'center';
     b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
     return b;
   }
@@ -1007,8 +1020,15 @@
       floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
       return;
     }
-    // 主视图：页眉 + 分段方向开关 + 关闭 + 设置入口
+    // 主视图：页眉 + 开关键 + 分段方向开关 + 设置入口
     floatPanel.appendChild(floatPanelHeader());
+    const toggleLabel = state === 'off'
+      ? '▶ 开启转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
+      : '⏸ 关闭转换';
+    floatPanel.appendChild(floatPanelRow(toggleLabel, () => {
+      if (state === 'off') setState(lastDirection); // 关闭时沿用上次方向重新开启
+      else setState('off');
+    }, { primary: true }));
     const seg = document.createElement('div');
     Object.assign(seg.style, {
       display: 'flex', gap: '4px', borderRadius: '10px',
@@ -1021,7 +1041,6 @@
     seg.appendChild(s1);
     seg.appendChild(s2);
     floatPanel.appendChild(seg);
-    floatPanel.appendChild(floatPanelRow('⏻ 关闭转换', () => { setState('off'); }, { muted: true }));
     floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('⚙ 设置', () => { floatPanelView = 'settings'; renderFloatPanelContent(); }));
   }
