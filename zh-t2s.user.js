@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.2.0
+// @version      2.3.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -631,13 +631,6 @@
     }
     return `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
   }
-  function menuCaptionStatus() {
-    if (!hasOpenCC) return `⚪ 当前页：opencc-js 未加载`;
-    if (isWhitelisted) return `⚪ 当前页：已忽略（${currentHost}）`;
-    if (state === 'off') return `⚪ 当前页：已关闭`;
-    const dir = state === 't2s' ? '繁→简' : '简→繁';
-    return `🟢 当前页：${dir} 转换中`;
-  }
   function menuCaptionToggleWhitelist() {
     return isWhitelisted
       ? `➖ 移出白名单（${currentHost}）`
@@ -684,47 +677,23 @@
         console.warn('[zh-t2s] 菜单注册失败:', caption, e);
       }
     }
+    // 仅保留顶层方向开关与"浮动按钮隐藏时"的兜底项；快捷键/白名单/统计/重置
+    // 已收进浮动按钮的「⚙ 设置」子面板，避免菜单过长（业界弹出层分层做法）。
     reg(menuCaptionT2S(), () => {
       setState(state === 't2s' ? 'off' : 't2s');
     });
     reg(menuCaptionS2T(), () => {
       setState(state === 's2t' ? 'off' : 's2t');
     });
-    // 第三个项：只读统计，点击重新注册以刷新标题
-    reg(menuCaptionStats(), () => {
-      refreshMenu();
-    });
-    // 第四、五项：快捷键配置
-    reg(menuCaptionConfigT2S(), () => {
-      capturingShortcut = 't2s';
-      refreshMenu(); // 立即更新标题提示用户按键
-    });
-    reg(menuCaptionConfigS2T(), () => {
-      capturingShortcut = 's2t';
-      refreshMenu();
-    });
-    // 第六项：当前页状态（只读，点击刷新）
-    reg(menuCaptionStatus(), () => {
-      refreshMenu();
-    });
-    // 第七项：加入/移出白名单
-    reg(menuCaptionToggleWhitelist(), () => {
-      toggleWhitelist();
-    });
-    // 第八项：清空白名单
-    reg(menuCaptionClearWhitelist(), () => {
-      clearWhitelist();
-    });
-    // 第九项：浮动按钮显示/隐藏（始终注册，便于重新开启）
-    reg(floatBtnEnabled ? '🙈 隐藏浮动按钮' : '👁 显示浮动按钮', () => {
-      setFloatBtnEnabled(!floatBtnEnabled);
-    });
-    // 第十项：重置所有设置
     reg('🔄 重置所有设置', () => {
       resetAllSettings();
     });
-    // 同步页面内浮动按钮的展示与文案
+    reg(floatBtnEnabled ? '🙈 隐藏浮动按钮' : '👁 显示浮动按钮', () => {
+      setFloatBtnEnabled(!floatBtnEnabled);
+    });
+    // 同步页面内浮动按钮的展示与文案；面板打开时同步重绘
     updateFloatBtn();
+    if (floatPanelOpen) renderFloatPanelContent();
   }
 
   function registerMenu() {
@@ -813,6 +782,7 @@
   let floatBtn = null;        // 主胶囊按钮
   let floatPanel = null;      // 展开面板
   let floatPanelOpen = false;
+  let floatPanelView = 'main'; // 'main' | 'settings'，面板主视图/设置子视图
 
   function floatBtnStateText() {
     if (!hasOpenCC) return { icon: '⚪', label: '未加载', on: false };
@@ -855,6 +825,7 @@
 
   function closeFloatPanel() {
     floatPanelOpen = false;
+    floatPanelView = 'main';
     if (floatPanel) { floatPanel.remove(); floatPanel = null; }
     document.removeEventListener('click', onDocClickCloseFloat, true);
   }
@@ -865,38 +836,120 @@
     }
   }
 
+  function floatPanelRow(label, onClick, opts) {
+    opts = opts || {};
+    const b = document.createElement('div');
+    b.textContent = label;
+    Object.assign(b.style, {
+      padding: '7px 8px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px'
+    });
+    if (opts.muted) b.style.color = '#888';
+    if (opts.danger) b.style.color = '#c0392b';
+    b.addEventListener('mouseenter', () => { b.style.background = '#eef3ff'; });
+    b.addEventListener('mouseleave', () => { b.style.background = 'transparent'; });
+    b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+    return b;
+  }
+
+  function floatPanelDivider() {
+    const d = document.createElement('div');
+    Object.assign(d.style, { height: '1px', background: '#eee', margin: '6px 0' });
+    return d;
+  }
+
+  // 分段控件的一段：active 时高亮蓝色
+  function floatPanelSeg(label, active) {
+    const b = document.createElement('div');
+    b.textContent = label;
+    Object.assign(b.style, {
+      flex: '1', textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: '12px', userSelect: 'none',
+      background: active ? 'rgba(40,130,255,.92)' : 'transparent',
+      color: active ? '#fff' : '#444'
+    });
+    b.addEventListener('mouseenter', () => { if (!active) b.style.background = '#f0f4ff'; });
+    b.addEventListener('mouseleave', () => { if (!active) b.style.background = 'transparent'; });
+    return b;
+  }
+
+  // 主视图页眉（不可点击）：标题 + 当前状态 + 统计小字
+  function floatPanelHeader() {
+    const h = document.createElement('div');
+    Object.assign(h.style, { padding: '2px 2px 8px', borderBottom: '1px solid #eee', marginBottom: '6px' });
+    const s = floatBtnStateText();
+    const title = document.createElement('div');
+    title.textContent = '繁简转换　' + s.icon + ' ' + s.label;
+    Object.assign(title.style, { fontWeight: '600', fontSize: '13px', color: '#222' });
+    const stat = document.createElement('div');
+    stat.textContent = menuCaptionStats().replace('📊 ', ''); // 已转 N 字 / M ms
+    Object.assign(stat.style, { fontSize: '11px', color: '#888', marginTop: '2px' });
+    h.appendChild(title);
+    h.appendChild(stat);
+    return h;
+  }
+
+  // 根据当前视图重绘面板内容（主视图 / 设置子视图）
+  function renderFloatPanelContent() {
+    if (!floatPanel) return;
+    floatPanel.innerHTML = '';
+    if (floatPanelView === 'settings') {
+      const shead = document.createElement('div');
+      Object.assign(shead.style, {
+        display: 'flex', alignItems: 'center', gap: '8px',
+        padding: '2px 2px 8px', borderBottom: '1px solid #eee', marginBottom: '6px'
+      });
+      const back = floatPanelRow('←', () => { floatPanelView = 'main'; renderFloatPanelContent(); });
+      back.style.padding = '2px 10px';
+      const stitle = document.createElement('div');
+      stitle.textContent = '设置';
+      stitle.style.fontWeight = '600';
+      shead.appendChild(back);
+      shead.appendChild(stitle);
+      floatPanel.appendChild(shead);
+
+      floatPanel.appendChild(floatPanelRow(menuCaptionConfigT2S(), () => { capturingShortcut = 't2s'; refreshMenu(); renderFloatPanelContent(); }));
+      floatPanel.appendChild(floatPanelRow(menuCaptionConfigS2T(), () => { capturingShortcut = 's2t'; refreshMenu(); renderFloatPanelContent(); }));
+      floatPanel.appendChild(floatPanelDivider());
+      floatPanel.appendChild(floatPanelRow(menuCaptionToggleWhitelist(), () => { toggleWhitelist(); }));
+      floatPanel.appendChild(floatPanelRow(menuCaptionClearWhitelist(), () => { clearWhitelist(); }));
+      floatPanel.appendChild(floatPanelDivider());
+      floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
+      floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
+      return;
+    }
+    // 主视图：页眉 + 分段方向开关 + 关闭 + 设置入口
+    floatPanel.appendChild(floatPanelHeader());
+    const seg = document.createElement('div');
+    Object.assign(seg.style, {
+      display: 'flex', borderRadius: '8px', overflow: 'hidden',
+      border: '1px solid #d0d7de', marginBottom: '6px'
+    });
+    const s1 = floatPanelSeg('繁→简', state === 't2s');
+    s1.addEventListener('click', (e) => { e.stopPropagation(); setState('t2s'); });
+    const s2 = floatPanelSeg('简→繁', state === 's2t');
+    s2.addEventListener('click', (e) => { e.stopPropagation(); setState('s2t'); });
+    seg.appendChild(s1);
+    seg.appendChild(s2);
+    floatPanel.appendChild(seg);
+    floatPanel.appendChild(floatPanelRow('⏻ 关闭转换', () => { setState('off'); }, { muted: true }));
+    floatPanel.appendChild(floatPanelDivider());
+    floatPanel.appendChild(floatPanelRow('⚙ 设置', () => { floatPanelView = 'settings'; renderFloatPanelContent(); }));
+  }
+
   function openFloatPanel() {
     floatPanelOpen = true;
+    floatPanelView = 'main';
     floatPanel = document.createElement('div');
     floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
     Object.assign(floatPanel.style, {
       position: 'fixed', right: '12px', bottom: '48px', zIndex: '2147483646',
-      display: 'flex', flexDirection: 'column', minWidth: '148px',
+      display: 'flex', flexDirection: 'column', minWidth: '160px',
       padding: '6px', borderRadius: '10px', cursor: 'default',
       font: '12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
       color: '#222', background: '#fff',
       boxShadow: '0 4px 16px rgba(0,0,0,.3)', userSelect: 'none', pointerEvents: 'auto'
     });
-    const mk = (label, onClick) => {
-      const b = document.createElement('div');
-      b.textContent = label;
-      Object.assign(b.style, {
-        padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap'
-      });
-      b.addEventListener('mouseenter', () => { b.style.background = '#eef3ff'; });
-      b.addEventListener('mouseleave', () => { b.style.background = 'transparent'; });
-      b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-      return b;
-    };
-    floatPanel.appendChild(mk('✅ 繁→简', () => { setState(state === 't2s' ? 'off' : 't2s'); closeFloatPanel(); }));
-    floatPanel.appendChild(mk('✅ 简→繁', () => { setState(state === 's2t' ? 'off' : 's2t'); closeFloatPanel(); }));
-    const statusLine = mk('🟢 当前：' + floatBtnStateText().label, () => {});
-    statusLine.style.color = '#888';
-    statusLine.style.cursor = 'default';
-    floatPanel.appendChild(statusLine);
-    floatPanel.appendChild(mk('🔄 重置所有设置', () => { resetAllSettings(); }));
-    floatPanel.appendChild(mk('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
     document.documentElement.appendChild(floatPanel);
+    renderFloatPanelContent();
     // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
     setTimeout(() => document.addEventListener('click', onDocClickCloseFloat, true), 0);
   }
