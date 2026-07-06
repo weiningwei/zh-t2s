@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.3.0
+// @version      2.4.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -82,8 +82,10 @@
   // 浮动状态按钮（页面内可见开关，默认显示，可在油猴菜单关闭）
   // 仅顶层框架创建；按钮自身带 .ignore-opencc，且用内联样式隔离页面 CSS。
   const FLOAT_BTN_KEY = 'zh-t2s-floatbtn';
+  const FLOAT_BTN_POS = 'zh-t2s-floatpos'; // 按钮拖动后的位置 { left, top }
   const FLOAT_BTN_DEFAULT = true; // 默认显示；用户可在油猴菜单关闭
   let floatBtnEnabled = FLOAT_BTN_DEFAULT;
+  let floatBtnPos = null; // { left, top } 字符串像素值；null 表示用默认右下角
 
   /* ============================================================
    * 2.1 状态模型（持久化到 GM 存储，全局共享）
@@ -135,11 +137,13 @@
     }
   } catch (e) {}
 
-  // 浮动按钮开关（默认开启，用户可在菜单隐藏）
+  // 浮动按钮开关与位置（默认开启/右下角，用户可隐藏或拖动）
   try {
     if (typeof GM_getValue === 'function') {
       const fb = GM_getValue(FLOAT_BTN_KEY, null);
       if (typeof fb === 'boolean') floatBtnEnabled = fb;
+      const fp = GM_getValue(FLOAT_BTN_POS, null);
+      if (fp && typeof fp.left === 'string' && typeof fp.top === 'string') floatBtnPos = fp;
     }
   } catch (e) {}
 
@@ -780,9 +784,13 @@
    * 仅顶层框架创建（与菜单一致）。
    * ============================================================ */
   let floatBtn = null;        // 主胶囊按钮
+  let floatBtnLabel = null;   // 按钮内文案 span
+  let floatBtnBadge = null;   // 按钮内状态徽标 span
   let floatPanel = null;      // 展开面板
   let floatPanelOpen = false;
   let floatPanelView = 'main'; // 'main' | 'settings'，面板主视图/设置子视图
+  let dragState = null;       // 拖动过程临时状态
+  let dragJustMoved = false;  // 刚发生过拖动，吞掉随后的误触 click
 
   function floatBtnStateText() {
     if (!hasOpenCC) return { icon: '⚪', label: '未加载', on: false };
@@ -793,25 +801,76 @@
       : { icon: '🟢', label: '简→繁', on: true };
   }
 
+  // 注入浮动 UI 样式表（唯一 class 前缀 zh-t2s-，不与页面样式冲突）。
+  // 布局/定位用 class 保证不被页面 CSS 重置；hover/active/动画仅 class 可实现。
+  function injectFloatStyles() {
+    if (document.getElementById('zh-t2s-float-style')) return;
+    const css = [
+      '.zh-t2s-floatbtn{position:fixed;z-index:2147483646;display:flex;align-items:center;gap:6px;',
+      'padding:7px 13px 7px 8px;border-radius:999px;cursor:grab;user-select:none;-webkit-user-select:none;',
+      'touch-action:none;font:12px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
+      'color:#fff;background:linear-gradient(135deg,#5b9bff,#2f6bff);box-shadow:0 4px 14px rgba(47,107,255,.38);',
+      'transition:transform .12s ease,box-shadow .2s ease,background .2s ease,filter .15s ease;}',
+      '.zh-t2s-floatbtn:hover{box-shadow:0 6px 22px rgba(47,107,255,.5);filter:brightness(1.04);}',
+      '.zh-t2s-floatbtn:active{transform:scale(.95);cursor:grabbing;}',
+      '.zh-t2s-floatbtn.off{background:linear-gradient(135deg,#b8c0cc,#8a93a3);box-shadow:0 4px 14px rgba(0,0,0,.2);}',
+      '.zh-t2s-badge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;',
+      'font-size:11px;font-weight:700;background:rgba(255,255,255,.22);color:#fff;flex:none;}',
+      '.zh-t2s-floatpanel{position:fixed;right:12px;bottom:54px;z-index:2147483646;width:208px;box-sizing:border-box;',
+      'background:#fff;color:#1f2329;border:1px solid rgba(0,0,0,.06);border-radius:14px;',
+      'box-shadow:0 14px 36px rgba(0,0,0,.2);padding:8px;',
+      'font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
+      'animation:zh-t2s-pop .14s ease;}',
+      '@keyframes zh-t2s-pop{from{opacity:0;transform:translateY(8px) scale(.96);}to{opacity:1;transform:none;}}',
+      '.zh-t2s-row{padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .12s ease;}',
+      '.zh-t2s-row:hover{background:#eef3ff;}',
+      '.zh-t2s-row.muted{color:#8a93a3;}',
+      '.zh-t2s-row.danger{color:#e5484d;}',
+      '.zh-t2s-row.danger:hover{background:#fdeced;}',
+      '.zh-t2s-seg{flex:1;text-align:center;padding:8px 0;cursor:pointer;border-radius:8px;color:#4a5160;',
+      'transition:background .15s ease,color .15s ease;font-size:12px;}',
+      '.zh-t2s-seg:hover{background:#f0f4ff;}',
+      '.zh-t2s-seg.active{background:linear-gradient(135deg,#5b9bff,#2f6bff);color:#fff;font-weight:600;}',
+      '.zh-t2s-divider{height:1px;background:#eef0f3;margin:6px 2px;}',
+      '.zh-t2s-header{padding:4px 4px 10px;border-bottom:1px solid #eef0f3;margin-bottom:8px;}',
+      '.zh-t2s-header .t{font-weight:600;font-size:13px;color:#1f2329;display:flex;align-items:center;gap:6px;}',
+      '.zh-t2s-header .s{font-size:11px;color:#8a93a3;margin-top:3px;}',
+      '.zh-t2s-dot{width:8px;height:8px;border-radius:50%;background:#2fbf6b;box-shadow:0 0 0 3px rgba(47,191,107,.18);flex:none;}',
+      '.zh-t2s-dot.off{background:#b8c0cc;box-shadow:none;}'
+    ].join('\n');
+    const style = document.createElement('style');
+    style.id = 'zh-t2s-float-style';
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
   function ensureFloatBtn() {
     if (!floatBtnEnabled) return;
     if (window.top !== window.self) return; // 仅顶层框架
+    injectFloatStyles();
     if (floatBtn) { updateFloatBtn(); return; }
     floatBtn = document.createElement('div');
     floatBtn.className = 'ignore-opencc zh-t2s-floatbtn';
-    Object.assign(floatBtn.style, {
-      position: 'fixed', right: '12px', bottom: '12px', zIndex: '2147483646',
-      display: 'flex', alignItems: 'center', gap: '4px',
-      padding: '6px 10px', borderRadius: '16px', cursor: 'pointer',
-      font: '12px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
-      color: '#fff', background: 'rgba(40,130,255,.92)',
-      boxShadow: '0 2px 8px rgba(0,0,0,.25)', userSelect: 'none',
-      pointerEvents: 'auto'
-    });
+    if (floatBtnPos) { // 应用已保存的拖动位置
+      floatBtn.style.left = floatBtnPos.left;
+      floatBtn.style.top = floatBtnPos.top;
+      floatBtn.style.right = 'auto';
+      floatBtn.style.bottom = 'auto';
+    } else { // 默认右下角
+      floatBtn.style.right = '12px';
+      floatBtn.style.bottom = '12px';
+    }
+    floatBtnBadge = document.createElement('span');
+    floatBtnBadge.className = 'zh-t2s-badge';
+    floatBtnLabel = document.createElement('span');
+    floatBtn.appendChild(floatBtnBadge);
+    floatBtn.appendChild(floatBtnLabel);
     floatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (dragJustMoved) { dragJustMoved = false; return; } // 拖动结束的误触 click，吞掉
       toggleFloatPanel();
     });
+    floatBtn.addEventListener('pointerdown', onFloatPointerDown);
     document.documentElement.appendChild(floatBtn);
     updateFloatBtn();
   }
@@ -819,8 +878,9 @@
   function updateFloatBtn() {
     if (!floatBtn) return;
     const s = floatBtnStateText();
-    floatBtn.textContent = s.icon + ' ' + s.label;
-    floatBtn.style.background = s.on ? 'rgba(40,130,255,.92)' : 'rgba(120,120,120,.9)';
+    floatBtnLabel.textContent = s.label;
+    floatBtnBadge.textContent = s.on ? (state === 's2t' ? '简' : '繁') : '·';
+    floatBtn.classList.toggle('off', !s.on);
   }
 
   function closeFloatPanel() {
@@ -836,53 +896,87 @@
     }
   }
 
+  // 拖动支持（Pointer Events 统一鼠标/触屏）：移动超 5px 视为拖动，否则视为点击
+  function onFloatPointerDown(e) {
+    if (e.button != null && e.button !== 0) return; // 仅左键/触摸
+    const rect = floatBtn.getBoundingClientRect();
+    dragState = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top, moved: false };
+    document.addEventListener('pointermove', onFloatPointerMove);
+    document.addEventListener('pointerup', onFloatPointerUp);
+  }
+
+  function onFloatPointerMove(e) {
+    if (!dragState) return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if (!dragState.moved) {
+      if (Math.hypot(dx, dy) < 5) return;
+      dragState.moved = true;
+      closeFloatPanel(); // 拖动时收起面板，避免错位
+    }
+    const w = floatBtn.offsetWidth, h = floatBtn.offsetHeight;
+    let left = Math.max(4, Math.min(dragState.origLeft + dx, window.innerWidth - w - 4));
+    let top = Math.max(4, Math.min(dragState.origTop + dy, window.innerHeight - h - 4));
+    floatBtn.style.left = left + 'px';
+    floatBtn.style.top = top + 'px';
+    floatBtn.style.right = 'auto';
+    floatBtn.style.bottom = 'auto';
+  }
+
+  function onFloatPointerUp() {
+    if (!dragState) return;
+    const moved = dragState.moved;
+    dragState = null;
+    document.removeEventListener('pointermove', onFloatPointerMove);
+    document.removeEventListener('pointerup', onFloatPointerUp);
+    if (moved) {
+      dragJustMoved = true; // 阻止随后误触发的 click 切换面板
+      try {
+        if (typeof GM_setValue === 'function') {
+          GM_setValue(FLOAT_BTN_POS, { left: floatBtn.style.left, top: floatBtn.style.top });
+        }
+      } catch (e) {}
+    }
+  }
+
   function floatPanelRow(label, onClick, opts) {
     opts = opts || {};
     const b = document.createElement('div');
+    b.className = 'zh-t2s-row' + (opts.muted ? ' muted' : '') + (opts.danger ? ' danger' : '');
     b.textContent = label;
-    Object.assign(b.style, {
-      padding: '7px 8px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px'
-    });
-    if (opts.muted) b.style.color = '#888';
-    if (opts.danger) b.style.color = '#c0392b';
-    b.addEventListener('mouseenter', () => { b.style.background = '#eef3ff'; });
-    b.addEventListener('mouseleave', () => { b.style.background = 'transparent'; });
     b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
     return b;
   }
 
   function floatPanelDivider() {
     const d = document.createElement('div');
-    Object.assign(d.style, { height: '1px', background: '#eee', margin: '6px 0' });
+    d.className = 'zh-t2s-divider';
     return d;
   }
 
-  // 分段控件的一段：active 时高亮蓝色
+  // 分段控件的一段：active 时高亮蓝色（样式见 .zh-t2s-seg）
   function floatPanelSeg(label, active) {
     const b = document.createElement('div');
+    b.className = 'zh-t2s-seg' + (active ? ' active' : '');
     b.textContent = label;
-    Object.assign(b.style, {
-      flex: '1', textAlign: 'center', padding: '6px 0', cursor: 'pointer', fontSize: '12px', userSelect: 'none',
-      background: active ? 'rgba(40,130,255,.92)' : 'transparent',
-      color: active ? '#fff' : '#444'
-    });
-    b.addEventListener('mouseenter', () => { if (!active) b.style.background = '#f0f4ff'; });
-    b.addEventListener('mouseleave', () => { if (!active) b.style.background = 'transparent'; });
     return b;
   }
 
-  // 主视图页眉（不可点击）：标题 + 当前状态 + 统计小字
+  // 主视图页眉（不可点击）：标题 + 状态点 + 统计小字
   function floatPanelHeader() {
     const h = document.createElement('div');
-    Object.assign(h.style, { padding: '2px 2px 8px', borderBottom: '1px solid #eee', marginBottom: '6px' });
+    h.className = 'zh-t2s-header';
     const s = floatBtnStateText();
-    const title = document.createElement('div');
-    title.textContent = '繁简转换　' + s.icon + ' ' + s.label;
-    Object.assign(title.style, { fontWeight: '600', fontSize: '13px', color: '#222' });
+    const t = document.createElement('div');
+    t.className = 't';
+    const dot = document.createElement('span');
+    dot.className = 'zh-t2s-dot' + (s.on ? '' : ' off');
+    t.appendChild(dot);
+    t.appendChild(document.createTextNode('繁简转换　' + s.label));
     const stat = document.createElement('div');
+    stat.className = 's';
     stat.textContent = menuCaptionStats().replace('📊 ', ''); // 已转 N 字 / M ms
-    Object.assign(stat.style, { fontSize: '11px', color: '#888', marginTop: '2px' });
-    h.appendChild(title);
+    h.appendChild(t);
     h.appendChild(stat);
     return h;
   }
@@ -893,12 +987,9 @@
     floatPanel.innerHTML = '';
     if (floatPanelView === 'settings') {
       const shead = document.createElement('div');
-      Object.assign(shead.style, {
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '2px 2px 8px', borderBottom: '1px solid #eee', marginBottom: '6px'
-      });
+      shead.className = 'zh-t2s-header';
       const back = floatPanelRow('←', () => { floatPanelView = 'main'; renderFloatPanelContent(); });
-      back.style.padding = '2px 10px';
+      back.style.padding = '4px 10px';
       const stitle = document.createElement('div');
       stitle.textContent = '设置';
       stitle.style.fontWeight = '600';
@@ -920,8 +1011,8 @@
     floatPanel.appendChild(floatPanelHeader());
     const seg = document.createElement('div');
     Object.assign(seg.style, {
-      display: 'flex', borderRadius: '8px', overflow: 'hidden',
-      border: '1px solid #d0d7de', marginBottom: '6px'
+      display: 'flex', gap: '4px', borderRadius: '10px',
+      border: '1px solid #e3e7ee', padding: '3px', marginBottom: '6px', background: '#f6f8fb'
     });
     const s1 = floatPanelSeg('繁→简', state === 't2s');
     s1.addEventListener('click', (e) => { e.stopPropagation(); setState('t2s'); });
@@ -940,14 +1031,6 @@
     floatPanelView = 'main';
     floatPanel = document.createElement('div');
     floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
-    Object.assign(floatPanel.style, {
-      position: 'fixed', right: '12px', bottom: '48px', zIndex: '2147483646',
-      display: 'flex', flexDirection: 'column', minWidth: '160px',
-      padding: '6px', borderRadius: '10px', cursor: 'default',
-      font: '12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif',
-      color: '#222', background: '#fff',
-      boxShadow: '0 4px 16px rgba(0,0,0,.3)', userSelect: 'none', pointerEvents: 'auto'
-    });
     document.documentElement.appendChild(floatPanel);
     renderFloatPanelContent();
     // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
@@ -986,6 +1069,7 @@
         GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(WHITELIST_KEY, []);
         GM_setValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT);
+        GM_setValue(FLOAT_BTN_POS, null); // 顺便复位拖动位置，回到默认右下角
       }
     } catch (e) {}
     location.reload();
