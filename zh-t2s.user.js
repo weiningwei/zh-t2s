@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.1.0
+// @version      2.2.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -719,6 +719,10 @@
     reg(floatBtnEnabled ? '🙈 隐藏浮动按钮' : '👁 显示浮动按钮', () => {
       setFloatBtnEnabled(!floatBtnEnabled);
     });
+    // 第十项：重置所有设置
+    reg('🔄 重置所有设置', () => {
+      resetAllSettings();
+    });
     // 同步页面内浮动按钮的展示与文案
     updateFloatBtn();
   }
@@ -890,6 +894,7 @@
     statusLine.style.color = '#888';
     statusLine.style.cursor = 'default';
     floatPanel.appendChild(statusLine);
+    floatPanel.appendChild(mk('🔄 重置所有设置', () => { resetAllSettings(); }));
     floatPanel.appendChild(mk('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
     document.documentElement.appendChild(floatPanel);
     // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
@@ -911,6 +916,26 @@
       if (floatBtn) { floatBtn.remove(); floatBtn = null; }
     }
     refreshMenu(); // 同步菜单项文案（显示/隐藏）
+  }
+
+  /* ============================================================
+   * 8.4 重置所有设置
+   * ============================================================
+   * 清除全部持久化偏好（方向、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
+   * 沿用仓库约定（白名单变更亦 reload）以保证 DOM 与状态干净重启。
+   * ============================================================ */
+  function resetAllSettings() {
+    if (!window.confirm('确定重置所有设置？\n将清除方向、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
+    try {
+      if (typeof GM_setValue === 'function') {
+        GM_setValue(STATE_KEY, 't2s');
+        GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
+        GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
+        GM_setValue(WHITELIST_KEY, []);
+        GM_setValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT);
+      }
+    } catch (e) {}
+    location.reload();
   }
 
   /* ============================================================
