@@ -1,0 +1,21 @@
+README.md
+  s_36434a42576982::t_2b1426c02f3793 137
+  s_36434a42576982::t_e4eeae7491a596 118,122-123,125
+  s_36434a42576982::t_7e4615d493b958 25-27,29-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "550cfc5ac282a3acb8ee4958517423a9ed44bb2a",
+  "prompts": {},
+  "sessions": {
+    "s_36434a42576982": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ce71cbd3ffeGBZbdzLWIKYvQr",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
