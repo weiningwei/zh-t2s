@@ -92,7 +92,7 @@
    * ============================================================
    * 三态：'t2s'（繁→简，默认）| 's2t'（简→繁）| 'off'（关闭）
    * 通过油猴菜单两个互斥项切换：点当前方向项则关闭，点另一方向项则切换。
-   * GM_setValue 全局共享，所有站点同方向；BroadcastChannel 同步同源 iframe。
+   * GM_setValue 全局共享，所有站点同方向；BroadcastChannel 同步同源标签页（@noframes 已禁止 iframe 运行本脚本）。
    * 兼容旧版：旧 key 存 '1'/'0'，启动时自动迁移为新三态。
    * ============================================================ */
   const STATE_KEY = 'zh-t2s-enabled'; // 保留 key，避免旧用户偏好丢失
@@ -111,7 +111,7 @@
     }
   } catch (e) { /* 读取失败保持默认开启 */ }
 
-  // 跨框架同步（同源 iframe 之间实时同步状态）
+  // 跨标签页同步（同源标签页之间实时同步状态；@noframes 已禁止 iframe 运行本脚本）
   let channel = null;
   try { channel = new BroadcastChannel('zh-t2s'); } catch (e) { channel = null; }
 
@@ -151,9 +151,13 @@
     }
   } catch (e) {}
 
+  /** 标准化键名：单字符转大写，多字符（F1-F12、Enter 等）保留 */
+  function normalizeKey(e) {
+    return e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  }
+
   function matchShortcut(e, shortcut) {
-    // 标准化键名：单字符转大写，多字符（F1-F12、Enter 等）保留
-    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    const key = normalizeKey(e);
     return key === shortcut.key &&
            e.ctrlKey === shortcut.ctrl &&
            e.altKey === shortcut.alt &&
@@ -600,7 +604,7 @@
     }
   }
 
-  // 同源 iframe 之间同步状态
+  // 同源标签页之间同步状态（@noframes 已禁止 iframe 运行本脚本）
   if (channel) {
     channel.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'zh-t2s-state' && e.data.state !== state) {
@@ -742,7 +746,7 @@
         return;
       }
       const newShortcut = {
-        key: e.key.length === 1 ? e.key.toUpperCase() : e.key,
+        key: normalizeKey(e),
         ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey
       };
       // 冲突检测：与另一方向相同 / 与浏览器常见快捷键冲突
