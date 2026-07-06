@@ -4,6 +4,14 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.15] - 2026-07-05
+
+### 优化
+
+- **`shouldSkipText` 快速路径**：跳过节点判断先检查 `parentElement.nodeName`（O(1) Set.has），命中 script/style/textarea 等直接返回，避免对每个文本节点调 `closest()` 上溯祖先链。仅在稀有情况（`.ignore-opencc`、contenteditable）才走 `closest` 回退。
+- **Observer 自写回过滤**：`characterData`/`attributes` 回调中先检查 `textState`/`attrState` 是否与当前 DOM 值一致，一致则跳过入队。消除"写回 → 触发观察者 → 入队 → 判等跳过"的无谓开销。
+- **`processQueue` 取值优化**：`queue.values().next().value` 替代 `for..of` 迭代器取值，避免每节点创建新迭代器对象。
+
 ## [2.0.14] - 2026-07-05
 
 ### 修复

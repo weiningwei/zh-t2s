@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.0.14
+// @version      2.0.15
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -64,15 +64,13 @@
   const IDLE_TIMEOUT = 2000; // requestIdleCallback 兜底超时（ms），保证不会一直不执行
   const CHUNK_SIZE = 300;    // 每个空闲帧最多处理的节点数，防止长时间占用主线程
 
-  // 不转换其内部内容的元素选择器（防止破坏页面功能）
+  // 不转换其内部内容的元素（防止破坏页面功能）
   // - script/style/noscript：代码与样式
   // - textarea/input：用户输入
   // - template：模板内容（未渲染）
   // - xmp/plaintext： legacy 原样显示
   // - iframe/object/embed：外部嵌入内容（多数跨域无法访问）
   // - .ignore-opencc：与 opencc-js HTMLConverter 一致的忽略约定
-  const SKIP_SELECTOR =
-    'script,style,noscript,textarea,input,template,xmp,plaintext,iframe,object,embed,.ignore-opencc';
   const SKIP_TAGS = new Set([
     'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT',
     'TEMPLATE', 'XMP', 'PLAINTEXT', 'IFRAME', 'OBJECT', 'EMBED'
@@ -266,7 +264,11 @@
   /** 文本节点是否应被跳过 */
   function shouldSkipText(node) {
     const el = node.parentElement;
-    if (el && el.closest(SKIP_SELECTOR)) return true;
+    if (!el) return false;
+    // 快速路径：直接父元素在 SKIP_TAGS 中（script/style/noscript/textarea/xmp/plaintext 的子文本都是直系）
+    if (SKIP_TAGS.has(el.nodeName)) return true;
+    // 回退：需爬祖先链的稀有情况（.ignore-opencc 类、可编辑元素内）
+    if (el.closest('.ignore-opencc')) return true;
     if (inActiveEditable(node)) return true;
     return false;
   }
@@ -393,8 +395,7 @@
       if (hasDeadline && processed > 0 && deadline.timeRemaining() <= 0) { scheduleIdle(); return; }
 
       // 取一个节点（O(1)）
-      let node;
-      for (const n of queue) { node = n; break; }
+      const node = queue.values().next().value;
       if (node === undefined) break;
       queue.delete(node);
 
@@ -429,15 +430,21 @@
    * - characterData：捕获文本内容的改动
    * - attributes（限定为可转换属性）：捕获 placeholder/title 等改动
    *
-   * 自身写回引发的变更会进入队列，但在 convertTextNode/convertAttributes
-   * 中被状态记录判定为“自己上次写入的值”而跳过，因此不会形成死循环。
-   * ============================================================ */
+    * 自身写回引发的变更在 observer 回调中被 textState/attrState 预检过滤，不会入队。
+    * ============================================================ */
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
       if (m.type === 'characterData') {
-        if (m.target && m.target.nodeType === Node.TEXT_NODE) queue.add(m.target);
+        if (m.target && m.target.nodeType === Node.TEXT_NODE) {
+          if (textState.get(m.target) === m.target.nodeValue) continue; // 自写回的值，跳过
+          queue.add(m.target);
+        }
       } else if (m.type === 'attributes') {
-        if (m.target && m.target.nodeType === Node.ELEMENT_NODE) queue.add(m.target);
+        if (m.target && m.target.nodeType === Node.ELEMENT_NODE) {
+          const map = attrState.get(m.target);
+          if (map && map.get(m.attributeName) === m.target.getAttribute(m.attributeName)) continue; // 自写回的值
+          queue.add(m.target);
+        }
       } else if (m.type === 'childList') {
         // addedNodes 是各新增子树的根节点，对其整棵子树入队
         m.addedNodes.forEach((n) => {
