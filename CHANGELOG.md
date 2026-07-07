@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.4] - 2026-07-07
+
+### 修复
+
+- **胶囊再次点击可靠关闭面板**：根因为胶囊按钮内含徽标/文案子元素，再次点击时 `e.target` 为子 `<span>` 而非按钮本身，导致「点击外部关闭」的捕获监听误判为外部点击而先关闭面板，随后按钮自身 handler 又重新打开，表现为"关不掉"。将 `onDocClickCloseFloat` 的 `e.target !== floatBtn` 改为 `!floatBtn.contains(e.target)`，使点击胶囊任一子元素都不视为外部点击，胶囊再次点击即可靠收起面板。
+
 ## [2.4.3] - 2026-07-07
 
 ### 优化
