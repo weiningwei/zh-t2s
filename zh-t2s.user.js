@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.4.2
+// @version      2.4.3
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -282,9 +282,9 @@
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
   function inActiveEditable(node) {
     const el = node.parentElement;
-    if (!el) return false;
-    const ed = el.closest('[contenteditable="true"]');
-    return !!ed && ed === document.activeElement;
+    // 用原生 isContentEditable 替代 el.closest('[contenteditable="true"]')，
+    // 避免对每个文本节点都向上遍历祖先链（浏览器内部已高效缓存该判定）。
+    return !!el && el.isContentEditable && el === document.activeElement;
   }
 
   /** 文本节点是否应被跳过 */
@@ -310,9 +310,7 @@
     if (!HAS_CJK.test(text)) return;                    // 预检：无汉字直接跳过
     if (textState.get(node) === text) return;          // 自己上次写入的值，无外部改动
     if (!textOriginal.has(node)) textOriginal.set(node, text); // 记录原始值，供关闭时还原
-    const t0 = performance.now();
     const out = safeConvert(text);
-    stats.time += performance.now() - t0;              // 累计 OpenCC 耗时
     if (out !== text) {
       stats.chars += text.length;                      // 累计实际改变字符数
       node.nodeValue = out;                             // 写回会触发 characterData 变更
@@ -336,9 +334,7 @@
       if (map.get(attr) === val) continue;              // 自己上次写入的值
       if (!HAS_CJK.test(val)) { map.set(attr, val); continue; } // 预检：无汉字直接跳过
       if (!origMap.has(attr)) origMap.set(attr, val);   // 记录原始值
-      const t0 = performance.now();
       const out = safeConvert(val);
-      stats.time += performance.now() - t0;            // 累计 OpenCC 耗时
       if (out !== val) {
         stats.chars += val.length;                      // 累计实际改变字符数
         el.setAttribute(attr, out);
@@ -418,6 +414,9 @@
     scheduled = false;
     const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
     let processed = 0;
+    // 整批统一计时：避免在 convertTextNode/convertAttributes 内对每个节点
+    // 各调两次 performance.now()（初始扫描时节点成千上万，开销可观）。
+    const t0 = performance.now();
     while (queue.size > 0) {
       if (processed >= CHUNK_SIZE) { scheduleIdle(); return; }
       if (hasDeadline && processed > 0 && deadline.timeRemaining() <= 0) { scheduleIdle(); return; }
@@ -440,6 +439,7 @@
       }
       processed++;
     }
+    if (processed > 0) stats.time += performance.now() - t0; // 累计 OpenCC 耗时（整批）
     // 队列处理完毕：刷新菜单让统计项显示最新数据
     // 节流 1 秒，避免动态内容持续到来时频繁注销+重注册菜单项
     if (processed > 0) {

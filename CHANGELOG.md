@@ -4,6 +4,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.3] - 2026-07-07
+
+### 优化
+
+- **转换计时改为整批统计**：移除 `convertTextNode` / `convertAttributes` 内对每个节点各两次的 `performance.now()` 调用，改为在 `processQueue` 每批（最多 `CHUNK_SIZE` 个节点）统一计时一次，初始大页面扫描时省掉成千上万次计时器调用。
+- **可编辑区判定改用原生属性**：`inActiveEditable` 由 `el.closest('[contenteditable="true"]')` 改为原生 `Element.isContentEditable`，避免对每个文本节点都向上遍历祖先链。
+
 ## [2.4.2] - 2026-07-07
 
 ### 修复
