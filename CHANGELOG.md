@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.2] - 2026-07-07
+
+### 修复
+
+- **胶囊再次点击可靠关闭面板**：胶囊按钮的点击处理由调用 `toggleFloatPanel()` 改为根据 `floatPanelOpen` 状态显式关闭/展开，避免与「点击面板外部关闭」的捕获阶段监听存在事件时序冲突，确保面板展开后再次点击胶囊必定收起；同时移除因此产生的死代码 `toggleFloatPanel()`。
+
 ## [2.4.1] - 2026-07-06
 
 ### 修复

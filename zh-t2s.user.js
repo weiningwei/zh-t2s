@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.4.1
+// @version      2.4.2
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -884,7 +884,9 @@
     floatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (dragJustMoved) { dragJustMoved = false; return; } // 拖动结束的误触 click，吞掉
-      toggleFloatPanel(); // 胶囊点击 = 展开/收起设置面板
+      // 胶囊点击 = 展开/收起设置面板；面板已展开时再次点击直接关闭
+      if (floatPanelOpen) closeFloatPanel();
+      else openFloatPanel();
     });
     floatBtn.addEventListener('pointerdown', onFloatPointerDown);
     document.documentElement.appendChild(floatBtn);
@@ -1058,11 +1060,6 @@
     renderFloatPanelContent();
     // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
     setTimeout(() => document.addEventListener('click', onDocClickCloseFloat, true), 0);
-  }
-
-  function toggleFloatPanel() {
-    if (floatPanelOpen) closeFloatPanel();
-    else openFloatPanel();
   }
 
   function setFloatBtnEnabled(on) {
