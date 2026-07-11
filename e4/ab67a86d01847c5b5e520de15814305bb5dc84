@@ -1,0 +1,26 @@
+zh-t2s.user.js
+  s_47c3c4e1ad1cc5::t_413da706644968 307
+  s_47c3c4e1ad1cc5::t_fb1914dd54ebaa 282-290
+  s_47c3c4e1ad1cc5::t_d03ac39438c47b 484
+  s_47c3c4e1ad1cc5::t_2e6c9336a7b49b 317-327
+  s_47c3c4e1ad1cc5::t_958179c49f1e5f 389-390
+  s_47c3c4e1ad1cc5::t_7872dbfc368eb6 7
+CHANGELOG.md
+  s_47c3c4e1ad1cc5::t_311dc48d0e8457 7-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e4ab67a86d01847c5b5e520de15814305bb5dc84",
+  "prompts": {},
+  "sessions": {
+    "s_47c3c4e1ad1cc5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0addc9af6ffeZKyPmh1yWoy5m4",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
