@@ -1,0 +1,21 @@
+zh-t2s.user.js
+  s_47c3c4e1ad1cc5::t_f46e612fd3f786 7
+CHANGELOG.md
+  s_47c3c4e1ad1cc5::t_88127070e119ad 7-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "a3c3ea7318851cb855722d66846d752b30d4bc4d",
+  "prompts": {},
+  "sessions": {
+    "s_47c3c4e1ad1cc5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0addc9af6ffeZKyPmh1yWoy5m4",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
