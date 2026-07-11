@@ -1,0 +1,28 @@
+README.md
+  s_47c3c4e1ad1cc5::t_523b0599f55c25 81-82,84
+  s_47c3c4e1ad1cc5::t_a5be1da43d4998 110,117
+  s_47c3c4e1ad1cc5::t_280cf5dcbc3691 37-40
+  s_47c3c4e1ad1cc5::t_91acdc8babe0a2 141
+  s_47c3c4e1ad1cc5::t_bdc9898dd56da7 45
+  s_47c3c4e1ad1cc5::t_6b2ebbc2e3bf3b 135-136
+  s_47c3c4e1ad1cc5::t_e11635a927df41 123
+  s_47c3c4e1ad1cc5::t_e5bca94ac05824 125-126
+  s_47c3c4e1ad1cc5::t_6099542ad68c78 68,70-71,73,75
+  s_47c3c4e1ad1cc5::t_8171920be2c43d 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "81bacddd534bf43485806cbca5878fa8ba21503c",
+  "prompts": {},
+  "sessions": {
+    "s_47c3c4e1ad1cc5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0addc9af6ffeZKyPmh1yWoy5m4",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
