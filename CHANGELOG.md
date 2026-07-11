@@ -4,6 +4,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.6] - 2026-07-12
+
+### 优化
+
+- **`closest('.ignore-opencc')` 调用从 O(N) 降至 O(1)**：新增 `ignoreCache`（WeakMap）缓存元素是否有 `.ignore-opencc` 祖先，首次 miss 后同祖先的子节点缓存命中。大页面（数万文本节点）下避免重复 DOM 爬升。
+- **CJK 预检前置到 TreeWalker filter**：`TEXT_FILTER` 将 CJK 判断从 `convertTextNode` 提前到入队阶段，纯 ASCII 文本节点（30-60%）不入队，缩小队列体积、减少 Set 操作与后续遍历。
+- **`TEXT_FILTER` 提取为模块级常量**：避免每次 `enqueueSubtree` 新建 filter 对象，减轻 GC 压力。
+- **MutationObserver characterData 补 CJK 预检**：非 CJK 字符变更（如数字、英文编辑）不再入队，与 TreeWalker 路径行为一致。
+
 ## [2.4.5] - 2026-07-12
 
 ### 修复

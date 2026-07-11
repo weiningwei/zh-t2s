@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.4.5
+// @version      2.4.6
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -279,6 +279,15 @@
     attrOriginal = new WeakMap();
   }
 
+  /** 缓存元素是否有 .ignore-opencc 祖先，避免重复 closest() DOM 爬升 */
+  const ignoreCache = new WeakMap();
+  function hasIgnoreAncestor(el) {
+    if (ignoreCache.has(el)) return ignoreCache.get(el);
+    const result = !!el.closest('.ignore-opencc');
+    ignoreCache.set(el, result);
+    return result;
+  }
+
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
   function inActiveEditable(node) {
     const el = node.parentElement;
@@ -295,7 +304,7 @@
     // 快速路径：直接父元素在 SKIP_TAGS 中（script/style/noscript/textarea/xmp/plaintext 的子文本都是直系）
     if (SKIP_TAGS.has(el.nodeName)) return true;
     // 回退：需爬祖先链的稀有情况（.ignore-opencc 类、可编辑元素内）
-    if (el.closest('.ignore-opencc')) return true;
+    if (hasIgnoreAncestor(el)) return true;
     if (inActiveEditable(node)) return true;
     return false;
   }
@@ -304,6 +313,17 @@
   // 覆盖基本区(\u4e00-\u9fff)与扩展A区(\u3400-\u4dbf)，足以判定"是否有可转换汉字"。
   // 命中率决定收益：典型网页 30-60% 文本节点为纯 ASCII（URL、数字、英文），可全部跳过。
   const HAS_CJK = /[\u4e00-\u9fff\u3400-\u4dbf]/;
+
+  /** 可复用的 TreeWalker filter，避免每次 enqueueSubtree 新建对象；
+   *  CJK 预检前置：不含汉字的文本节点不入队，减少队列 30-60%。 */
+  const TEXT_FILTER = Object.freeze({
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (!HAS_CJK.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+      if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
 
   function convertTextNode(node) {
     const text = node.nodeValue;
@@ -366,17 +386,8 @@
     if (t === Node.ELEMENT_NODE && SKIP_TAGS.has(root.nodeName)) return; // 整棵子树跳过
 
     // 1) Text 节点：TreeWalker 仅遍历文本，跳过 SKIP_TAGS 子树
-    const walker = document.createTreeWalker(
-      root,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode(node) {
-          if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-          if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
-    );
+    //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText + ignoreCache
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, TEXT_FILTER);
     while (walker.nextNode()) queue.add(walker.currentNode);
 
     // 2) 属性元素：原生选择器一次性查询（包含 root 自身若命中）
@@ -470,6 +481,7 @@
       if (m.type === 'characterData') {
         if (m.target && m.target.nodeType === Node.TEXT_NODE) {
           if (textState.get(m.target) === m.target.nodeValue) continue; // 自写回的值，跳过
+          if (!HAS_CJK.test(m.target.nodeValue)) continue; // 非 CJK 字符变更不入队
           if (shouldSkipText(m.target)) continue;
           queue.add(m.target);
         }
