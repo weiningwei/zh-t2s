@@ -955,10 +955,17 @@
   }
 
   function closeFloatPanel() {
+    if (!floatPanel) return;
     floatPanelOpen = false;
     floatPanelView = 'main';
-    if (floatPanel) { floatPanel.remove(); floatPanel = null; }
     document.removeEventListener('click', onDocClickCloseFloat, true);
+    const panel = floatPanel;
+    // 立即断开引用以防重复关闭，保留 DOM 做退出动画
+    floatPanel = null;
+    panel.style.transition = 'opacity .12s ease, transform .12s ease';
+    panel.style.opacity = '0';
+    panel.style.transform = 'translateY(8px) scale(.96)';
+    setTimeout(() => { if (panel.parentNode) panel.remove(); }, 120);
   }
 
   function onDocClickCloseFloat(e) {
@@ -1071,8 +1078,20 @@
       shead.appendChild(stitle);
       floatPanel.appendChild(shead);
 
-      floatPanel.appendChild(floatPanelRow(menuCaptionConfigT2S(), () => { capturingShortcut = 't2s'; refreshMenu(); renderFloatPanelContent(); }));
-      floatPanel.appendChild(floatPanelRow(menuCaptionConfigS2T(), () => { capturingShortcut = 's2t'; refreshMenu(); renderFloatPanelContent(); }));
+      const t2sRow = floatPanelRow(menuCaptionConfigT2S(), () => { capturingShortcut = 't2s'; refreshMenu(); renderFloatPanelContent(); });
+      if (capturingShortcut === 't2s') {
+        t2sRow.style.background = '#fff8e1';
+        t2sRow.style.border = '1px solid #ffc107';
+        t2sRow.style.borderRadius = '8px';
+      }
+      floatPanel.appendChild(t2sRow);
+      const s2tRow = floatPanelRow(menuCaptionConfigS2T(), () => { capturingShortcut = 's2t'; refreshMenu(); renderFloatPanelContent(); });
+      if (capturingShortcut === 's2t') {
+        s2tRow.style.background = '#fff8e1';
+        s2tRow.style.border = '1px solid #ffc107';
+        s2tRow.style.borderRadius = '8px';
+      }
+      floatPanel.appendChild(s2tRow);
       floatPanel.appendChild(floatPanelDivider());
       floatPanel.appendChild(floatPanelRow(menuCaptionToggleWhitelist(), () => { toggleWhitelist(); }));
       if (whitelist.length > 0) {
