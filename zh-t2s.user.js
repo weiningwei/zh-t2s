@@ -691,6 +691,7 @@
   /** 清空白名单，就地生效无需刷新 */
   function clearWhitelist() {
     if (whitelist.length === 0) return;
+    if (!confirm('确定清空白名单（共 ' + whitelist.length + ' 项）？')) return;
     whitelist = [];
     isWhitelisted = false;
     saveWhitelist();
@@ -873,7 +874,7 @@
       '.zh-t2s-floatbtn.off{background:linear-gradient(135deg,#b8c0cc,#8a93a3);box-shadow:0 4px 14px rgba(0,0,0,.2);}',
       '.zh-t2s-badge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;',
       'font-size:11px;font-weight:700;background:rgba(255,255,255,.22);color:#fff;flex:none;}',
-      '.zh-t2s-floatpanel{position:fixed;right:12px;bottom:54px;z-index:2147483646;width:208px;box-sizing:border-box;',
+      '.zh-t2s-floatpanel{position:fixed;right:12px;bottom:54px;z-index:2147483646;width:240px;box-sizing:border-box;',
       'background:#fff;color:#1f2329;border:1px solid rgba(0,0,0,.06);border-radius:14px;',
       'box-shadow:0 14px 36px rgba(0,0,0,.2);padding:8px;',
       'font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
