@@ -931,6 +931,16 @@
       if (floatPanelOpen) closeFloatPanel();
       else openFloatPanel();
     });
+    // 右键快速切换方向，不经面板
+    floatBtn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (state === 'off') {
+        setState(lastDirection);
+      } else {
+        setState(state === 't2s' ? 's2t' : 't2s');
+      }
+    });
     floatBtn.addEventListener('pointerdown', onFloatPointerDown);
     document.documentElement.appendChild(floatBtn);
     updateFloatBtn();
@@ -1105,6 +1115,18 @@
     floatPanelView = 'main';
     floatPanel = document.createElement('div');
     floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
+    // 面板位置随 FAB 动态调整，避免拖到顶部时面板飞出屏幕
+    const fabRect = floatBtn.getBoundingClientRect();
+    const spaceAbove = fabRect.top;
+    const spaceBelow = window.innerHeight - fabRect.bottom;
+    const panelRight = Math.max(4, Math.min(window.innerWidth - fabRect.right + 12, window.innerWidth - 244));
+    floatPanel.style.right = panelRight + 'px';
+    if (spaceAbove > spaceBelow) {
+      floatPanel.style.bottom = (window.innerHeight - fabRect.top + 8) + 'px';
+    } else {
+      floatPanel.style.top = (fabRect.bottom + 8) + 'px';
+      floatPanel.style.bottom = 'auto';
+    }
     document.documentElement.appendChild(floatPanel);
     renderFloatPanelContent();
     // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
