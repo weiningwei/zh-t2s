@@ -131,7 +131,6 @@
   const SHORTCUT_KEY_S2T = 'zh-t2s-shortcut-s2t';
   let shortcutT2S = { key: 'F8', ctrl: false, alt: false, shift: false, meta: false };
   let shortcutS2T = { key: 'F9', ctrl: false, alt: false, shift: false, meta: false };
-  let capturingShortcut = null; // null | 't2s' | 's2t'，配置捕获模式标志
   try {
     if (typeof GM_getValue === 'function') {
       const s1 = GM_getValue(SHORTCUT_KEY_T2S, null);
@@ -173,58 +172,6 @@
     if (s.meta) parts.push('Meta');
     parts.push(s.key);
     return parts.join('+');
-  }
-
-  // 浏览器/系统常见快捷键黑名单（Ctrl+字母组合），配置时警告
-  const BROWSER_SHORTCUT_CONFLICTS = {
-    'Ctrl+S': '保存',
-    'Ctrl+W': '关闭标签页',
-    'Ctrl+T': '新标签页',
-    'Ctrl+N': '新窗口',
-    'Ctrl+P': '打印',
-    'Ctrl+F': '查找',
-    'Ctrl+G': '查找下一个',
-    'Ctrl+H': '历史记录',
-    'Ctrl+J': '下载列表',
-    'Ctrl+D': '加入书签',
-    'Ctrl+L': '地址栏',
-    'Ctrl+O': '打开文件',
-    'Ctrl+Q': '退出',
-    'Ctrl+R': '刷新',
-    'Ctrl+A': '全选',
-    'Ctrl+C': '复制',
-    'Ctrl+V': '粘贴',
-    'Ctrl+X': '剪切',
-    'Ctrl+Z': '撤销',
-    'Ctrl+Y': '重做',
-    'Ctrl+Tab': '切换标签页',
-    'Ctrl+Shift+T': '恢复关闭的标签页',
-    'Ctrl+Shift+N': '隐私窗口',
-    'Ctrl+Shift+Delete': '清除浏览数据',
-    'F1': '帮助',
-    'F3': '查找下一个',
-    'F5': '刷新',
-    'F11': '全屏',
-    'F12': '开发者工具'
-  };
-
-  let conflictWarning = null; // 非空时显示警告，3 秒后清除
-
-  function detectConflict(sc, otherShortcut) {
-    // 与另一方向快捷键冲突
-    if (sc.key === otherShortcut.key &&
-        sc.ctrl === otherShortcut.ctrl &&
-        sc.alt === otherShortcut.alt &&
-        sc.shift === otherShortcut.shift &&
-        sc.meta === otherShortcut.meta) {
-      return '与另一方向快捷键相同';
-    }
-    // 与浏览器常见快捷键冲突
-    const name = formatShortcut(sc);
-    if (BROWSER_SHORTCUT_CONFLICTS[name]) {
-      return `浏览器「${BROWSER_SHORTCUT_CONFLICTS[name]}」快捷键`;
-    }
-    return null;
   }
 
   /* ============================================================
@@ -653,20 +600,6 @@
     const t = stats.time < 10 ? stats.time.toFixed(1) : Math.round(stats.time);
     return `📊 ${stats.chars}字 / ${t}ms`;
   }
-  function menuCaptionConfigT2S() {
-    if (capturingShortcut === 't2s') return '⌨️ 繁→简：按下新键（Esc 取消）';
-    if (conflictWarning && conflictWarning.target === 't2s') {
-      return `⚠️ ${conflictWarning.msg}，请重新配置`;
-    }
-    return `⚙️ 繁→简键：${formatShortcut(shortcutT2S)}`;
-  }
-  function menuCaptionConfigS2T() {
-    if (capturingShortcut === 's2t') return '⌨️ 简→繁：按下新键（Esc 取消）';
-    if (conflictWarning && conflictWarning.target === 's2t') {
-      return `⚠️ ${conflictWarning.msg}，请重新配置`;
-    }
-    return `⚙️ 简→繁键：${formatShortcut(shortcutS2T)}`;
-  }
   function menuCaptionToggleWhitelist() {
     return isWhitelisted
       ? `➖ 移出白名单（${currentHost}）`
@@ -768,9 +701,8 @@
   /* ============================================================
    * 8.1 快捷键监听（捕获阶段，优先于页面脚本）
    * ============================================================
-   * - 正常模式：匹配 F8/F9（或用户配置）切换 t2s/s2t 开关
-   * - 捕获模式：任意按键作为新快捷键，Esc 取消
-   * - 表单聚焦时（input/textarea/contenteditable）不响应正常模式
+   * 匹配 F8/F9（或用户配置）切换 t2s/s2t 开关。
+   * 表单聚焦时（input/textarea/contenteditable）不响应。
    * ============================================================ */
   document.addEventListener('keydown', (e) => {
     const ae = document.activeElement;
@@ -779,48 +711,6 @@
       ae.isContentEditable
     );
 
-    // 捕获模式：任何按键都作为新快捷键（不跳过表单，让用户随处可配置）
-    if (capturingShortcut) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === 'Escape') {
-        capturingShortcut = null;
-        conflictWarning = null;
-        refreshMenu();
-        return;
-      }
-      const newShortcut = {
-        key: normalizeKey(e),
-        ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey
-      };
-      // 冲突检测：与另一方向相同 / 与浏览器常见快捷键冲突
-      const other = capturingShortcut === 't2s' ? shortcutS2T : shortcutT2S;
-      const conflict = detectConflict(newShortcut, other);
-      if (conflict) {
-        // 有冲突：不保存，显示警告 3 秒后清除
-        conflictWarning = { target: capturingShortcut, msg: conflict };
-        capturingShortcut = null;
-        refreshMenu();
-        setTimeout(() => {
-          conflictWarning = null;
-          refreshMenu();
-        }, 3000);
-        return;
-      }
-      if (capturingShortcut === 't2s') {
-        shortcutT2S = newShortcut;
-        try { if (typeof GM_setValue === 'function') GM_setValue(SHORTCUT_KEY_T2S, newShortcut); } catch (e) {}
-      } else {
-        shortcutS2T = newShortcut;
-        try { if (typeof GM_setValue === 'function') GM_setValue(SHORTCUT_KEY_S2T, newShortcut); } catch (e) {}
-      }
-      capturingShortcut = null;
-      conflictWarning = null;
-      refreshMenu();
-      return;
-    }
-
-    // 正常模式：表单聚焦时跳过；白名单页跳过
     if (inForm) return;
     if (isWhitelisted) return;
 
@@ -846,7 +736,7 @@
   let floatBtnBadge = null;   // 按钮内状态徽标 span
   let floatPanel = null;      // 展开面板
   let floatPanelOpen = false;
-  let floatPanelView = 'main'; // 'main' | 'settings'，面板主视图/设置子视图
+  let floatPanelView = 'main';
   let dragState = null;       // 拖动过程临时状态
   let dragJustMoved = false;  // 刚发生过拖动，吞掉随后的误触 click
 
@@ -958,10 +848,8 @@
   function closeFloatPanel() {
     if (!floatPanel) return;
     floatPanelOpen = false;
-    floatPanelView = 'main';
     document.removeEventListener('click', onDocClickCloseFloat, true);
     const panel = floatPanel;
-    // 立即断开引用以防重复关闭，保留 DOM 做退出动画
     floatPanel = null;
     panel.style.transition = 'opacity .12s ease, transform .12s ease';
     panel.style.opacity = '0';
@@ -1067,38 +955,7 @@
   function renderFloatPanelContent() {
     if (!floatPanel) return;
     floatPanel.innerHTML = '';
-    if (floatPanelView === 'settings') {
-      const shead = document.createElement('div');
-      shead.className = 'zh-t2s-header';
-      const back = floatPanelRow('←', () => { floatPanelView = 'main'; renderFloatPanelContent(); });
-      back.style.padding = '4px 10px';
-      const stitle = document.createElement('div');
-      stitle.textContent = '设置';
-      stitle.style.fontWeight = '600';
-      shead.appendChild(back);
-      shead.appendChild(stitle);
-      floatPanel.appendChild(shead);
-
-      const t2sRow = floatPanelRow(menuCaptionConfigT2S(), () => { capturingShortcut = 't2s'; refreshMenu(); renderFloatPanelContent(); });
-      if (capturingShortcut === 't2s') {
-        t2sRow.style.background = '#fff8e1';
-        t2sRow.style.border = '1px solid #ffc107';
-        t2sRow.style.borderRadius = '8px';
-      }
-      floatPanel.appendChild(t2sRow);
-      const s2tRow = floatPanelRow(menuCaptionConfigS2T(), () => { capturingShortcut = 's2t'; refreshMenu(); renderFloatPanelContent(); });
-      if (capturingShortcut === 's2t') {
-        s2tRow.style.background = '#fff8e1';
-        s2tRow.style.border = '1px solid #ffc107';
-        s2tRow.style.borderRadius = '8px';
-      }
-      floatPanel.appendChild(s2tRow);
-      floatPanel.appendChild(floatPanelDivider());
-      floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
-      floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
-      return;
-    }
-    // 主视图：页眉 + 方向分段 + 开关 + 白名单 + 设置入口
+    // 全扁平主视图：页眉 + 方向分段 + 开关 + 白名单 + 重置 + 隐藏
     floatPanel.appendChild(floatPanelHeader());
     const seg = document.createElement('div');
     Object.assign(seg.style, {
@@ -1127,12 +984,12 @@
       floatPanel.appendChild(floatPanelRow('🗑 白名单为空', null, { muted: true }));
     }
     floatPanel.appendChild(floatPanelDivider());
-    floatPanel.appendChild(floatPanelRow('⚙ 快捷键配置', () => { floatPanelView = 'settings'; renderFloatPanelContent(); }));
+    floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
+    floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
   }
 
   function openFloatPanel() {
     floatPanelOpen = true;
-    floatPanelView = 'main';
     floatPanel = document.createElement('div');
     floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
     // 面板位置随 FAB 动态调整，避免拖到顶部时面板飞出屏幕
