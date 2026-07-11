@@ -894,7 +894,7 @@
       '.zh-t2s-divider{height:1px;background:#eef0f3;margin:6px 2px;}',
       '.zh-t2s-header{padding:4px 4px 10px;border-bottom:1px solid #eef0f3;margin-bottom:8px;}',
       '.zh-t2s-header .t{font-weight:600;font-size:13px;color:#1f2329;display:flex;align-items:center;gap:6px;}',
-      '.zh-t2s-header .s{font-size:11px;color:#8a93a3;margin-top:3px;}',
+      '.zh-t2s-header .s{font-size:12px;color:#6b7280;margin-top:3px;}',
       '.zh-t2s-dot{width:8px;height:8px;border-radius:50%;background:#2fbf6b;box-shadow:0 0 0 3px rgba(47,191,107,.18);flex:none;}',
       '.zh-t2s-dot.off{background:#b8c0cc;box-shadow:none;}'
     ].join('\n');
@@ -1094,26 +1094,12 @@
       }
       floatPanel.appendChild(s2tRow);
       floatPanel.appendChild(floatPanelDivider());
-      floatPanel.appendChild(floatPanelRow(menuCaptionToggleWhitelist(), () => { toggleWhitelist(); }));
-      if (whitelist.length > 0) {
-        floatPanel.appendChild(floatPanelRow(menuCaptionClearWhitelist(), () => { clearWhitelist(); }));
-      } else {
-        floatPanel.appendChild(floatPanelRow('🗑 白名单为空', null, { muted: true }));
-      }
-      floatPanel.appendChild(floatPanelDivider());
       floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
       floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
       return;
     }
-    // 主视图：页眉 + 开关键 + 分段方向开关 + 设置入口
+    // 主视图：页眉 + 方向分段 + 开关 + 白名单 + 设置入口
     floatPanel.appendChild(floatPanelHeader());
-    const toggleLabel = state === 'off'
-      ? '▶ 开启转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
-      : '⏸ 关闭转换';
-    floatPanel.appendChild(floatPanelRow(toggleLabel, () => {
-      if (state === 'off') setState(lastDirection); // 关闭时沿用上次方向重新开启
-      else setState('off');
-    }, { primary: true }));
     const seg = document.createElement('div');
     Object.assign(seg.style, {
       display: 'flex', gap: '4px', borderRadius: '10px',
@@ -1126,8 +1112,22 @@
     seg.appendChild(s1);
     seg.appendChild(s2);
     floatPanel.appendChild(seg);
+    const toggleLabel = state === 'off'
+      ? '▶ 开启转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
+      : '⏸ 关闭转换';
+    floatPanel.appendChild(floatPanelRow(toggleLabel, () => {
+      if (state === 'off') setState(lastDirection);
+      else setState('off');
+    }));
     floatPanel.appendChild(floatPanelDivider());
-    floatPanel.appendChild(floatPanelRow('⚙ 设置', () => { floatPanelView = 'settings'; renderFloatPanelContent(); }));
+    floatPanel.appendChild(floatPanelRow(menuCaptionToggleWhitelist(), () => { toggleWhitelist(); }));
+    if (whitelist.length > 0) {
+      floatPanel.appendChild(floatPanelRow(menuCaptionClearWhitelist(), () => { clearWhitelist(); }));
+    } else {
+      floatPanel.appendChild(floatPanelRow('🗑 白名单为空', null, { muted: true }));
+    }
+    floatPanel.appendChild(floatPanelDivider());
+    floatPanel.appendChild(floatPanelRow('⚙ 快捷键配置', () => { floatPanelView = 'settings'; renderFloatPanelContent(); }));
   }
 
   function openFloatPanel() {
