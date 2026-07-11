@@ -4,6 +4,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.4.5] - 2026-07-12
+
+### 修复
+
+- **分批统计耗时偏低**：`processQueue` 在达到 `CHUNK_SIZE` 或空闲时间耗尽时会提前让出主线程，此前这些提前返回的批次没有把已处理时间计入 `stats.time`，导致大页面统计耗时偏低。现提前让出前也会结算本批耗时。
+- **可编辑区动态输入保护**：`contenteditable` 内嵌套元素的文本变更现在会在 `MutationObserver` 入队前重新检查跳过条件，并增强 active editable 判定，避免用户正在编辑的内容被动态转换打断。
+
 ## [2.4.4] - 2026-07-07
 
 ### 修复
