@@ -8,6 +8,7 @@
 
 ### 优化
 
+- **白名单操作不再刷新页面**：`toggleWhitelist` / `clearWhitelist` 调 `applyWhitelistChange()` 就地恢复/启停 observer，白名单切换后实时更新 FAB、菜单与面板内容，不再调用 `location.reload()`。
 - **`closest('.ignore-opencc')` 调用从 O(N) 降至 O(1)**：新增 `ignoreCache`（WeakMap）缓存元素是否有 `.ignore-opencc` 祖先，首次 miss 后同祖先的子节点缓存命中。大页面（数万文本节点）下避免重复 DOM 爬升。
 - **CJK 预检前置到 TreeWalker filter**：`TEXT_FILTER` 将 CJK 判断从 `convertTextNode` 提前到入队阶段，纯 ASCII 文本节点（30-60%）不入队，缩小队列体积、减少 Set 操作与后续遍历。
 - **`TEXT_FILTER` 提取为模块级常量**：避免每次 `enqueueSubtree` 新建 filter 对象，减轻 GC 压力。

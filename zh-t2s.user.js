@@ -676,23 +676,48 @@
     return `🗑 清空白名单（共 ${whitelist.length} 项）`;
   }
 
-  /** 加入/移出白名单（当前域名），保存后刷新页面生效 */
+  /** 加入/移出白名单（当前域名），就地生效无需刷新 */
   function toggleWhitelist() {
     if (isWhitelisted) {
       whitelist = whitelist.filter((h) => h !== currentHost);
     } else {
       whitelist.push(currentHost);
     }
+    isWhitelisted = !isWhitelisted;
     saveWhitelist();
-    location.reload(); // 白名单变化必须刷新，重新走 start 判断
+    applyWhitelistChange();
   }
 
-  /** 清空白名单，保存后刷新页面生效 */
+  /** 清空白名单，就地生效无需刷新 */
   function clearWhitelist() {
     if (whitelist.length === 0) return;
     whitelist = [];
+    isWhitelisted = false;
     saveWhitelist();
-    location.reload();
+    applyWhitelistChange();
+  }
+
+  /** 白名单改变后的就地应用：恢复/启停 observer，不刷新页面 */
+  function applyWhitelistChange() {
+    if (isWhitelisted) {
+      if (state !== 'off' && hasOpenCC) {
+        observer.disconnect();
+        queue.clear();
+        scheduled = false;
+        restoreAll();
+        clearAllState();
+      }
+    } else {
+      if (state !== 'off' && hasOpenCC) {
+        convert = converters[state];
+        observer.observe(document.documentElement, OBSERVER_OPTIONS);
+        enqueueSubtree(document.documentElement);
+        scheduleIdle();
+      }
+    }
+    updateFloatBtn();
+    refreshMenu();
+    if (floatPanelOpen) renderFloatPanelContent();
   }
 
   function refreshMenu() {
@@ -1040,7 +1065,11 @@
       floatPanel.appendChild(floatPanelRow(menuCaptionConfigS2T(), () => { capturingShortcut = 's2t'; refreshMenu(); renderFloatPanelContent(); }));
       floatPanel.appendChild(floatPanelDivider());
       floatPanel.appendChild(floatPanelRow(menuCaptionToggleWhitelist(), () => { toggleWhitelist(); }));
-      floatPanel.appendChild(floatPanelRow(menuCaptionClearWhitelist(), () => { clearWhitelist(); }));
+      if (whitelist.length > 0) {
+        floatPanel.appendChild(floatPanelRow(menuCaptionClearWhitelist(), () => { clearWhitelist(); }));
+      } else {
+        floatPanel.appendChild(floatPanelRow('🗑 白名单为空', null, { muted: true }));
+      }
       floatPanel.appendChild(floatPanelDivider());
       floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
       floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
