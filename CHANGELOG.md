@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.6.0] - 2026-07-12
+
+### 变更
+
+- **面板完全扁平化**：移除设置子视图，所有操作（方向分段、开关、白名单、重置、隐藏）直接铺在主视图，一步直达无需子面板。删除快捷键配置入口（快捷键仍可通过 F8/F9 使用，GM 菜单标题已显示键名），移除 `capturingShortcut`、`conflictWarning`、`detectConflict`、`BROWSER_SHORTCUT_CONFLICTS` 等约 150 行死代码。
+
 ## [2.5.0] - 2026-07-12
 
 ### 新增
