@@ -1,0 +1,22 @@
+CHANGELOG.md
+  s_47c3c4e1ad1cc5::t_fc647925a7d25c 11
+zh-t2s.user.js
+  s_47c3c4e1ad1cc5::t_fcfb3d344786b7 679,686,688,691,695,697-720
+  s_47c3c4e1ad1cc5::t_4cf7b9c5556f40 1068-1072
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "431c5c5da46450c05acd75fe2dd47cb0fe666d2e",
+  "prompts": {},
+  "sessions": {
+    "s_47c3c4e1ad1cc5": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0addc9af6ffeZKyPmh1yWoy5m4",
+        "model": "unknown"
+      },
+      "human_author": null
+    }
+  }
+}
