@@ -4,6 +4,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.7.0] - 2026-07-12
+
+### 优化
+
+- **更快的转换**：移除 `convertTextNode` 中多余的 CJK 正则预检（已在 TreeWalker 和 MO 回调中双重过滤），每个文本节点省一次正则匹配。
+- **更准的统计**：`stats.time` 现在仅测量 OpenCC 实际转换耗时（`safeConvert` 调用），不再计入 WeakMap 操作、DOM 写入等开销。
+
 ## [2.6.0] - 2026-07-12
 
 ### 变更

@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.6.0
+// @version      2.7.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -275,10 +275,11 @@
   function convertTextNode(node) {
     const text = node.nodeValue;
     if (!text) return;
-    if (!HAS_CJK.test(text)) return;                    // 预检：无汉字直接跳过
     if (textState.get(node) === text) return;          // 自己上次写入的值，无外部改动
     if (!textOriginal.has(node)) textOriginal.set(node, text); // 记录原始值，供关闭时还原
+    const t1 = performance.now();
     const out = safeConvert(text);
+    stats.time += performance.now() - t1;
     if (out !== text) {
       stats.chars += text.length;                      // 累计实际改变字符数
       node.nodeValue = out;                             // 写回会触发 characterData 变更
@@ -302,7 +303,9 @@
       if (map.get(attr) === val) continue;              // 自己上次写入的值
       if (!HAS_CJK.test(val)) { map.set(attr, val); continue; } // 预检：无汉字直接跳过
       if (!origMap.has(attr)) origMap.set(attr, val);   // 记录原始值
+      const ta = performance.now();
       const out = safeConvert(val);
+      stats.time += performance.now() - ta;
       if (out !== val) {
         stats.chars += val.length;                      // 累计实际改变字符数
         el.setAttribute(attr, out);
@@ -373,11 +376,7 @@
     scheduled = false;
     const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
     let processed = 0;
-    // 整批统一计时：避免在 convertTextNode/convertAttributes 内对每个节点
-    // 各调两次 performance.now()（初始扫描时节点成千上万，开销可观）。
-    const t0 = performance.now();
     function yieldQueue() {
-      if (processed > 0) stats.time += performance.now() - t0;
       scheduleIdle();
     }
     while (queue.size > 0) {
@@ -402,7 +401,6 @@
       }
       processed++;
     }
-    if (processed > 0) stats.time += performance.now() - t0; // 累计 OpenCC 耗时（整批）
     // 队列处理完毕：刷新菜单让统计项显示最新数据
     // 节流 1 秒，避免动态内容持续到来时频繁注销+重注册菜单项
     if (processed > 0) {
