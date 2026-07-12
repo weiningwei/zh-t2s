@@ -1,0 +1,23 @@
+CHANGELOG.md
+  s_78e59382b612ed::t_f0012846f67661 7-13
+zh-t2s.user.js
+  s_78e59382b612ed::t_9da1e26d75a86b 7
+  s_78e59382b612ed::t_2bcc8372d70902 306,308
+  s_78e59382b612ed::t_c0336b89437953 280,282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "65fa35363767b9d3d2df19fde96afaf3cd5d07fb",
+  "prompts": {},
+  "sessions": {
+    "s_78e59382b612ed": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0aba9cd83ffed0VpjKo4c5F5jU",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
