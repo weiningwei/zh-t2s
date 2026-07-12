@@ -290,8 +290,7 @@
   }
 
   function convertAttributes(el) {
-    // .ignore-opencc 子树整体跳过（与 shouldSkipText 的约定一致，README 也已声明）
-    if (el.closest && el.closest('.ignore-opencc')) return;
+    if (hasIgnoreAncestor(el)) return;
     let map = attrState.get(el);
     if (!map) { map = new Map(); attrState.set(el, map); }
     let origMap = attrOriginal.get(el);
