@@ -1,6 +1,6 @@
 # zh-t2s
 
-一个 Tampermonkey 用户脚本，在网页中的**繁体中文**与**简体中文**之间双向转换。
+🌐 网页繁简体中文**双向转换**的 Tampermonkey 用户脚本 | **繁转简** / **简转繁** | 基于 OpenCC | 支持动态内容、白名单、快捷键。
 
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安装-670000?logo=greasyfork&logoColor=white)](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s)
 [![GitHub](https://img.shields.io/badge/GitHub-源码-181717?logo=github&logoColor=white)](https://github.com/weiningwei/zh-t2s)
