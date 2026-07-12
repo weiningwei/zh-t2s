@@ -4,6 +4,16 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.7.1] - 2026-07-12
+
+### 优化
+
+- **复用 ignoreCache 避免重复 DOM 爬升**：`convertAttributes` 统一使用已缓存的 `hasIgnoreAncestor`，消除 `convertAttributes` 与 `shouldSkipText` 之间的 `.closest('.ignore-opencc')` 重复调用。
+
+### 清理
+
+- 移除未使用变量 `floatPanelView`，内联 `yieldQueue` 单层包装函数。
+
 ## [2.7.0] - 2026-07-12
 
 ### 优化
