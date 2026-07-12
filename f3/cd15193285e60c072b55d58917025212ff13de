@@ -1,0 +1,19 @@
+README.md
+  s_78e59382b612ed::t_aa2c527a2fa77d 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "f3cd15193285e60c072b55d58917025212ff13de",
+  "prompts": {},
+  "sessions": {
+    "s_78e59382b612ed": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0aba9cd83ffed0VpjKo4c5F5jU",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
