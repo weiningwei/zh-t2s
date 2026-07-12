@@ -376,12 +376,9 @@
     scheduled = false;
     const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
     let processed = 0;
-    function yieldQueue() {
-      scheduleIdle();
-    }
     while (queue.size > 0) {
-      if (processed >= CHUNK_SIZE) { yieldQueue(); return; }
-      if (hasDeadline && processed > 0 && deadline.timeRemaining() <= 0) { yieldQueue(); return; }
+      if (processed >= CHUNK_SIZE) { scheduleIdle(); return; }
+      if (hasDeadline && processed > 0 && deadline.timeRemaining() <= 0) { scheduleIdle(); return; }
 
       // 取一个节点（O(1)）
       const node = queue.values().next().value;
@@ -734,7 +731,6 @@
   let floatBtnBadge = null;   // 按钮内状态徽标 span
   let floatPanel = null;      // 展开面板
   let floatPanelOpen = false;
-  let floatPanelView = 'main';
   let dragState = null;       // 拖动过程临时状态
   let dragJustMoved = false;  // 刚发生过拖动，吞掉随后的误触 click
 
