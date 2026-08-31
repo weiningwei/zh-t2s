@@ -12,7 +12,7 @@
 // @author       weiningwei
 // @match        *://*/*
 // @noframes
-// @require      https://cdn.jsdelivr.net/npm/opencc-js@1.4.0/dist/umd/full.js
+// @require      https://cdn.jsdelivr.net/npm/opencc-js@1.4.2/dist/umd/full.js
 // @run-at       document-idle
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
