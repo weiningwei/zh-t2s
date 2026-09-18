@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.8.0] - 2026-09-18
+
+### 新增
+
+- **支持 `data-placeholder` 属性转换**：部分框架/编辑器（如 Slate、Quill 定制主题）用 `data-placeholder` 属性配合 CSS `content: attr(data-placeholder)` 渲染搜索框等输入位的灰色占位文字，此前这类提示不会被转换。现已将其加入 `CONVERTIBLE_ATTRS` 与属性扫描选择器，初始扫描、动态变更监听（`attributeFilter`）与关闭/切换方向时的还原均自动覆盖。
+
 ## [2.7.2] - 2026-08-31
 
 ### 变更

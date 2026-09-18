@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.7.2
+// @version      2.8.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -77,7 +77,8 @@
   ]);
 
   // 需要转换的可见文本属性
-  const CONVERTIBLE_ATTRS = ['placeholder', 'title', 'alt', 'aria-label'];
+  // data-placeholder：部分框架/编辑器用该属性 + CSS content:attr() 渲染占位提示（如 Slate、Quill 定制主题）
+  const CONVERTIBLE_ATTRS = ['placeholder', 'data-placeholder', 'title', 'alt', 'aria-label'];
 
   // 浮动状态按钮（页面内可见开关，默认显示，可在油猴菜单关闭）
   // 仅顶层框架创建；按钮自身带 .ignore-opencc，且用内联样式隔离页面 CSS。
@@ -340,7 +341,7 @@
     while (walker.nextNode()) queue.add(walker.currentNode);
 
     // 2) 属性元素：原生选择器一次性查询（包含 root 自身若命中）
-    const ATTR_SELECTOR = '[placeholder],[title],[alt],[aria-label]';
+    const ATTR_SELECTOR = '[placeholder],[data-placeholder],[title],[alt],[aria-label]';
     try {
       if (t === Node.ELEMENT_NODE && root.matches?.(ATTR_SELECTOR)) queue.add(root);
       root.querySelectorAll?.(ATTR_SELECTOR).forEach((el) => {
