@@ -144,3 +144,4 @@ vite.config.ts.timestamp-*
 
 # Agent instructions (not part of the project)
 AGENTS.md
+.workbuddy/
