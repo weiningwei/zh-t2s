@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.8.0
+// @version      2.8.1
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -410,6 +410,29 @@
   }
 
   /* ============================================================
+   * 5.1 点击触发重扫（兜底「点击展开/加载」后 MutationObserver 漏捕的内容）
+   * ============================================================
+   * 部分站点（如 B 站折叠评论「点击查看」展开、各类「加载更多」按钮）在用户交互
+   * 之后才把内容插入/刷新 DOM，某些框架的更新模式可能让 MutationObserver 漏捕。
+   * 这里在 click 事件后做一次去抖的全文档重扫，确保新插入/更新的可见文本被纳入队列。
+   * 转换本身幂等（textState 回环守卫会跳过已转换节点），不会死循环或重复开销：
+   *   - 队列是 Set，已入队的节点不会重复堆积；
+   *   - 已转换节点进入 convertTextNode 后 O(1) 命中 textState 守卫直接返回，不调 OpenCC；
+   *   - 被框架回写为原文（繁体）的节点会被重新转换，正好修复「展开后繁体未转」的问题。
+   */
+  let rescanTimer = null;
+  const RESCAN_DELAY = 160; // 等框架完成 DOM 更新后再扫，避免扫描到更新前的临时状态
+  function rescanDocument() {
+    if (effectiveState() === 'off') return; // 关闭/白名单/无 opencc 时不扫
+    enqueueSubtree(document.documentElement);
+    scheduleIdle();
+  }
+  function scheduleRescan() {
+    if (rescanTimer != null) clearTimeout(rescanTimer);
+    rescanTimer = setTimeout(() => { rescanTimer = null; rescanDocument(); }, RESCAN_DELAY);
+  }
+
+  /* ============================================================
    * 6. MutationObserver：监听动态加载 / 异步插入的内容
    * ============================================================
    * - childList + subtree：捕获任意位置新增的节点
@@ -717,6 +740,11 @@
       setState(state === 's2t' ? 'off' : 's2t');
     }
   }, true);
+
+  // 点击后去抖重扫：兜底「点击查看/展开」「加载更多」等交互后才插入的可见文本。
+  // 用冒泡阶段 + 延时，确保 B 站等站点的点击处理逻辑先完成 DOM 更新，再扫描。
+  // 不 preventDefault / 不 stopPropagation，绝不干扰页面自身交互。
+  document.addEventListener('click', scheduleRescan, false);
 
   /* ============================================================
    * 8.3 浮动状态按钮（页面内可见开关，支持在菜单关闭）

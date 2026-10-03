@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.8.1] - 2026-10-03
+
+### 修复
+
+- **B 站等站点「点击查看 / 展开」后新增的繁体未转换**：折叠评论在用户点击「点击查看」后，前端框架才把完整评论插入或刷新 DOM，部分框架的更新模式会让 `MutationObserver` 漏捕这一动态插入，导致展开的繁体文本没被纳入转换队列。新增 `click` 事件触发的去抖全文档重扫（`scheduleRescan` / `rescanDocument`，延时 160ms 待框架完成 DOM 更新后再扫）。转换本身幂等（`textState` 回环守卫跳过已转换节点、已处理节点在 `convertTextNode` 中 O(1) 返回且不调 OpenCC），重扫仅补入漏掉的新文本；对被框架回写为原文的节点会重新转换，正好修复该问题。监听用冒泡阶段且不 `preventDefault`/`stopPropagation`，不干扰页面交互。
+
 ## [2.8.0] - 2026-09-18
 
 ### 新增
