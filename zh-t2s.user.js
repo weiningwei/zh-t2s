@@ -31,7 +31,7 @@
    * ============================================================
    * 使用 opencc-js（纯 JS 版 OpenCC），通过 @require 从 CDN 注入，
    * 字典在构建时已打包进脚本，运行时无需再请求字典文件。
-   * 同时构造繁→简与两种简→繁 converter 并缓存：
+   * 繁→简 converter 在启动时构建；简→繁按字形惰性构建并缓存：
    *   - t2s: from 't' -> to 'cn'（OpenCC 标准 t2s，繁→简）
    *   - s2t: from 'cn' -> to 'tw'/'hk'（简→繁，按用户选择输出台湾/香港字形）
    *     目标不用 't'：OpenCC 标准 s2t 偏正体/旧字形，会把 吃 转成 喫、
@@ -47,13 +47,12 @@
   if (!hasOpenCC) {
     console.warn('[zh-t2s] opencc-js 未加载，繁简转换已禁用（请检查网络或 @require 地址）。');
   }
-  // 字典在 opencc-js 模块级共享，三个 converter 实例仅配置对象，内存增量可忽略
+  // 字典在 opencc-js 模块级共享，converter 实例仅配置对象，内存增量可忽略；
+  // 但简→繁的地区字形 converter 构建开销较大（每个约 75ms），且关闭状态、
+  // 白名单站点与只用繁→简的用户根本用不到，故改为首次使用时惰性构建并缓存
   const converters = hasOpenCC ? {
     t2s: OpenCC.Converter({ from: 't', to: 'cn' }),
-    s2t: {
-      tw: OpenCC.Converter({ from: 'cn', to: 'tw' }),
-      hk: OpenCC.Converter({ from: 'cn', to: 'hk' })
-    }
+    s2t: {}
   } : {};
   let convert = hasOpenCC ? converters.t2s : null; // 当前活跃 converter，由 setState 切换
 
@@ -122,8 +121,13 @@
     }
   } catch (e) { /* 读取失败保持默认开启 */ }
 
+  /** 取当前方向对应的 converter；简→繁按字形惰性构建，首次使用时才付出构建开销 */
   function converterForState(direction) {
-    return direction === 's2t' ? converters.s2t[traditionalStyle] : converters.t2s;
+    if (!hasOpenCC) return null;
+    if (direction !== 's2t') return converters.t2s;
+    const style = traditionalStyle === 'hk' ? 'hk' : 'tw';
+    return converters.s2t[style] ||
+      (converters.s2t[style] = OpenCC.Converter({ from: 'cn', to: style }));
   }
 
   // 跨标签页同步（同源标签页之间实时同步状态；@noframes 已禁止 iframe 运行本脚本）
