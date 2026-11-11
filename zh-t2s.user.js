@@ -162,6 +162,10 @@
   const DICTIONARY_LIMIT = 1000; // 每方向上限，控制持久化与匹配开销
   let dictionary = { t2s: [], s2t: [] };
   let dictionaryTries = { t2s: new Map(), s2t: new Map() };
+  // 规则首字符是否为汉字。全部为汉字时，不含汉字的文本不可能命中任何规则，
+  // 预检可直接短路，省掉逐字符扫描 Trie 根节点的开销。
+  const HAN_START = /^\p{Script=Han}/u;
+  let dictionaryNonHanStart = { t2s: false, s2t: false };
 
   function validateDictionary(data) {
     if (!data || !Array.isArray(data.t2s) || !Array.isArray(data.s2t)) {
@@ -202,8 +206,10 @@
 
   function compileDictionary(data) {
     const tries = { t2s: new Map(), s2t: new Map() };
+    const nonHanStart = { t2s: false, s2t: false };
     for (const direction of ['t2s', 's2t']) {
       for (const [source, target] of data[direction]) {
+        if (!HAN_START.test(source)) nonHanStart[direction] = true;
         let branch = tries[direction];
         for (let i = 0; i < source.length; i++) {
           if (!branch.has(source[i])) branch.set(source[i], { next: new Map() });
@@ -213,6 +219,7 @@
         }
       }
     }
+    dictionaryNonHanStart = nonHanStart;
     return tries;
   }
 
@@ -410,6 +417,8 @@
     if (HAS_CJK.test(text)) return true;
     const root = dictionaryTries[state];
     if (!root || root.size === 0) return false;
+    // 规则首字符全是汉字时，无汉字文本不可能命中，免去逐字符扫描
+    if (!dictionaryNonHanStart[state]) return false;
     for (let i = 0; i < text.length; i++) if (root.has(text[i])) return true;
     return false;
   }
