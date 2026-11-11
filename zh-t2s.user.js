@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.8.1
+// @version      2.8.2
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -33,7 +33,10 @@
    * 字典在构建时已打包进脚本，运行时无需再请求字典文件。
    * 同时构造两个方向的 converter 并缓存：
    *   - t2s: from 't' -> to 'cn'（OpenCC 标准 t2s，繁→简）
-   *   - s2t: from 'cn' -> to 't'（OpenCC 标准 s2t，简→繁）
+   *   - s2t: from 'cn' -> to 'tw'（简→繁，目标为台湾常用字形）
+   *     目标不用 't'：OpenCC 标准 s2t 偏正体/旧字形，会把 吃 转成 喫、
+   *     这里 转成 這裏、刚才 转成 剛纔 等（见 issue #1），逐字比对共 62 字。
+   *     'tw' 仅叠加台湾字形表，不做用词转换（软件 仍为 軟件）。
    * 仅做字形繁简转换，不改变地区用词（如"軟體"不会变成"软件"）。
    * 内置 mmseg 短语分词，可依据上下文解决一对多映射
    *   例（t2s）：乾隆 不被误转为 干隆
@@ -47,7 +50,7 @@
   // 字典在 opencc-js 模块级共享，两个 converter 实例仅配置对象，内存增量可忽略
   const converters = hasOpenCC ? {
     t2s: OpenCC.Converter({ from: 't', to: 'cn' }),
-    s2t: OpenCC.Converter({ from: 'cn', to: 't' })
+    s2t: OpenCC.Converter({ from: 'cn', to: 'tw' })
   } : {};
   let convert = hasOpenCC ? converters.t2s : null; // 当前活跃 converter，由 setState 切换
 
