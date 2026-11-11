@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- **自定义词典实时预览**：编辑器新增「试一下」示例输入框，按当前页签方向使用草稿规则即时转换；不写入存储、不影响页面，保存前可确认规则是否写反方向或切断分词。为此把词典匹配逻辑从 `safeConvert` 抽成可复用的 `applyDictionary()`，预览复用同一套实现。
+
 ## [2.11.0] - 2026-11-11
 
 ### 变更

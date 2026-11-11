@@ -56,36 +56,41 @@
   } : {};
   let convert = hasOpenCC ? converters.t2s : null; // 当前活跃 converter，由 setState 切换
 
+  /** 按词典 Trie 转换文本：命中片段直接输出，其余片段交给 OpenCC */
+  function applyDictionary(text, convertFn, root) {
+    const parts = [];
+    let plainStart = 0;
+    for (let i = 0; i < text.length;) {
+      let branch = root;
+      let end = i;
+      let replacement;
+      for (let j = i; j < text.length; j++) {
+        const entry = branch.get(text[j]);
+        if (!entry) break;
+        if (entry.value !== undefined) {
+          end = j + 1;
+          replacement = entry.value;
+        }
+        branch = entry.next;
+      }
+      if (replacement === undefined) { i++; continue; }
+      if (plainStart < i) parts.push(convertFn(text.slice(plainStart, i)));
+      parts.push(replacement); // 用户结果为最终输出，不再转换或连锁替换
+      i = end;
+      plainStart = end;
+    }
+    if (plainStart === 0) return convertFn(text);
+    if (plainStart < text.length) parts.push(convertFn(text.slice(plainStart)));
+    return parts.join('');
+  }
+
   /** 包裹一层异常保护，避免转换器异常时影响页面或观察者 */
   function safeConvert(text) {
     if (!convert) return text;
     try {
       const root = dictionaryTries[state];
       if (!root || root.size === 0) return convert(text);
-      const parts = [];
-      let plainStart = 0;
-      for (let i = 0; i < text.length;) {
-        let branch = root;
-        let end = i;
-        let replacement;
-        for (let j = i; j < text.length; j++) {
-          const entry = branch.get(text[j]);
-          if (!entry) break;
-          if (entry.value !== undefined) {
-            end = j + 1;
-            replacement = entry.value;
-          }
-          branch = entry.next;
-        }
-        if (replacement === undefined) { i++; continue; }
-        if (plainStart < i) parts.push(convert(text.slice(plainStart, i)));
-        parts.push(replacement); // 用户结果为最终输出，不再转换或连锁替换
-        i = end;
-        plainStart = end;
-      }
-      if (plainStart === 0) return convert(text);
-      if (plainStart < text.length) parts.push(convert(text.slice(plainStart)));
-      return parts.join('');
+      return applyDictionary(text, convert, root);
     }
     catch (e) { return text; }
   }
@@ -204,7 +209,8 @@
     return result;
   }
 
-  function compileDictionary(data) {
+  /** 只构建 Trie 与首字符信息，不读写模块状态（预览等场景复用） */
+  function buildDictionaryTries(data) {
     const tries = { t2s: new Map(), s2t: new Map() };
     const nonHanStart = { t2s: false, s2t: false };
     for (const direction of ['t2s', 's2t']) {
@@ -219,6 +225,12 @@
         }
       }
     }
+    return { tries, nonHanStart };
+  }
+
+  /** 构建并切换到新的词典 */
+  function compileDictionary(data) {
+    const { tries, nonHanStart } = buildDictionaryTries(data);
     dictionaryNonHanStart = nonHanStart;
     return tries;
   }
@@ -1204,6 +1216,9 @@
         textarea{display:block;width:100%;height:220px;resize:vertical;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:14px/1.7 ui-monospace,monospace;background:#fff;color:#1f2329}
         .status{min-height:24px;color:#596579;white-space:pre-wrap;overflow-wrap:anywhere}
         .status[data-error="true"]{color:#b42318}
+        .preview{margin:10px 0 2px}
+        .preview input{display:block;width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif;color:#1f2329;background:#fff}
+        .preview-out{margin-top:6px;padding:8px 10px;border:1px dashed #d4dce8;border-radius:8px;background:#f9fbff;min-height:20px;font-size:13px;color:#263449;word-break:break-word}
         .actions{justify-content:flex-end}.hint{font-size:12px}
       </style>
       <div class="body">
@@ -1217,6 +1232,10 @@
         <textarea aria-label="繁转简词典" data-editor="t2s" spellcheck="false" placeholder="滑鼠 => 鼠标&#10;乾隆 => 乾隆"></textarea>
         <textarea aria-label="简转繁词典" data-editor="s2t" spellcheck="false" placeholder="头发 => 頭髮&#10;某人名 => 某人名" hidden></textarea>
         <p class="hint">首尾空格会去除；词内不能含 =&gt; 或制表符；每条规则占一行，不使用正则表达式。</p>
+        <div class="preview">
+          <input type="text" data-preview-input spellcheck="false" aria-label="转换预览输入" placeholder="试一下：输入示例文字，立即看到结果">
+          <div class="preview-out" data-preview-out aria-live="polite">预览结果会显示在这里</div>
+        </div>
         <div class="status" role="status" aria-live="polite"></div>
         <input type="file" accept=".json,application/json" hidden>
         <div class="actions">
@@ -1265,16 +1284,51 @@
     function cancel() {
       if (!hasChanges() || window.confirm('放弃尚未保存的词典修改？')) dialog.close();
     }
+    const previewInput = root.querySelector('[data-preview-input]');
+    const previewOut = root.querySelector('[data-preview-out]');
+    let previewCache = { key: '', tries: null };
+    let previewTimer = 0;
+    function activeDirection() {
+      const active = root.querySelector('[data-direction][aria-pressed="true"]');
+      return active ? active.dataset.direction : 't2s';
+    }
+    /** 用当前草稿预览示例文字：不写入存储，也不影响页面转换 */
+    function refreshPreview() {
+      const sample = previewInput.value;
+      if (!sample) { previewOut.textContent = '预览结果会显示在这里'; return; }
+      if (!hasOpenCC) { previewOut.textContent = '转换引擎未加载，无法预览。'; return; }
+      let draft;
+      try { draft = readEditors(); }
+      catch (e) { previewOut.textContent = '规则有误：' + e.message; return; }
+      const key = JSON.stringify(draft);
+      if (!previewCache.tries || previewCache.key !== key) {
+        previewCache = { key, tries: buildDictionaryTries(draft).tries };
+      }
+      const direction = activeDirection();
+      const convertFn = direction === 's2t' ? converterForState('s2t') : converters.t2s;
+      if (!convertFn) { previewOut.textContent = '转换引擎未加载，无法预览。'; return; }
+      try {
+        previewOut.textContent = applyDictionary(sample, convertFn, previewCache.tries[direction]);
+      } catch (e) { previewOut.textContent = '预览失败：' + e.message; }
+    }
+    previewInput.addEventListener('input', refreshPreview);
+    for (const direction of ['t2s', 's2t']) {
+      editors[direction].addEventListener('input', () => {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(refreshPreview, 300);
+      });
+    }
     root.querySelectorAll('[data-direction]').forEach((button) => {
       button.addEventListener('click', () => {
         root.querySelectorAll('[data-direction]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
         for (const direction of ['t2s', 's2t']) editors[direction].hidden = direction !== button.dataset.direction;
         editors[button.dataset.direction].focus();
+        refreshPreview();
       });
     });
     root.querySelector('[data-action="cancel"]').addEventListener('click', cancel);
     dialog.addEventListener('cancel', (e) => { e.preventDefault(); cancel(); });
-    dialog.addEventListener('close', () => { dictionaryDialog = null; dialog.remove(); });
+    dialog.addEventListener('close', () => { clearTimeout(previewTimer); dictionaryDialog = null; dialog.remove(); });
     root.querySelector('[data-action="save"]').addEventListener('click', () => {
       try {
         // 打开编辑器后若存储已被其他页面改写，先确认再覆盖，避免静默丢失对方改动
