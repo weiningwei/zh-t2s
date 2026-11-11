@@ -1,0 +1,18 @@
+CHANGELOG.md
+  h_ab7185b88fbcdb 7
+README.md
+  h_ab7185b88fbcdb 8
+zh-t2s.user.js
+  h_ab7185b88fbcdb 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "91d05ca61221bc24c5cb21ffcc2539da29d2fa9e",
+  "prompts": {},
+  "humans": {
+    "h_ab7185b88fbcdb": {
+      "author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
