@@ -4,6 +4,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+
+- **词典编辑器输入反馈**：输入法合成期间（`isComposing`）不再触发校验与预览，避免拼音阶段的半成品文本闪出「缺少分隔符」；`compositionend` 后补一次刷新。
+- 保存、导入、导出入口先清理待执行的反馈定时器，避免 300ms 后的条数统计覆盖「保存失败」「已导入」等操作结果提示。
+
 ## [2.13.0] - 2026-11-12
 
 ### 新增

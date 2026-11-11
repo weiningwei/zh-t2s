@@ -1322,12 +1322,16 @@
       showStatus('已识别 ' + total + ' 条规则（繁→简 ' + draft.t2s.length + ' 条，简→繁 ' + draft.s2t.length + ' 条）。');
     }
     refreshValidationFeedback();
-    previewInput.addEventListener('input', refreshPreview);
+    /** 去抖刷新：合成期间（拼音等）不触发，避免半成品文本闪错误 */
+    function scheduleFeedbackRefresh() {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(() => { refreshValidationFeedback(); refreshPreview(); }, 300);
+    }
+    previewInput.addEventListener('input', (e) => { if (!e.isComposing) refreshPreview(); });
+    previewInput.addEventListener('compositionend', refreshPreview);
     for (const direction of ['t2s', 's2t']) {
-      editors[direction].addEventListener('input', () => {
-        clearTimeout(previewTimer);
-        previewTimer = setTimeout(() => { refreshValidationFeedback(); refreshPreview(); }, 300);
-      });
+      editors[direction].addEventListener('input', (e) => { if (!e.isComposing) scheduleFeedbackRefresh(); });
+      editors[direction].addEventListener('compositionend', scheduleFeedbackRefresh);
     }
     root.querySelectorAll('[data-direction]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -1341,6 +1345,7 @@
     dialog.addEventListener('cancel', (e) => { e.preventDefault(); cancel(); });
     dialog.addEventListener('close', () => { clearTimeout(previewTimer); dictionaryDialog = null; dialog.remove(); });
     root.querySelector('[data-action="save"]').addEventListener('click', () => {
+      clearTimeout(previewTimer);
       try {
         // 打开编辑器后若存储已被其他页面改写，先确认再覆盖，避免静默丢失对方改动
         const stored = readStoredDictionary();
@@ -1353,6 +1358,7 @@
     const fileInput = root.querySelector('input[type="file"]');
     root.querySelector('[data-action="import"]').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', async () => {
+      clearTimeout(previewTimer);
       try {
         const file = fileInput.files[0];
         if (!file) return;
@@ -1367,6 +1373,7 @@
       finally { fileInput.value = ''; }
     });
     root.querySelector('[data-action="export"]').addEventListener('click', () => {
+      clearTimeout(previewTimer);
       try {
         const data = readEditors();
         const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
