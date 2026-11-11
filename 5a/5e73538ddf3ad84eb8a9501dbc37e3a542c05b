@@ -1,0 +1,25 @@
+CHANGELOG.md
+  s_b033eb0f14698a::t_4d55322b128f2c 47-52
+docs/DEVELOPMENT.md
+  s_b033eb0f14698a::t_4d55322b128f2c 1-56
+docs/README.md
+  s_b033eb0f14698a::t_4d55322b128f2c 1,3,5,7-9,11
+README.md
+  s_b033eb0f14698a::t_4d55322b128f2c 3,10,12,14,16-20,24-26,30,32-39,41,43,45,47,49,51,53,55,57,59,61,63,65,67,74-78,80,82-87,89,91-93,102,104,106,108,110,112-113,116,118,120,122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a5e73538ddf3ad84eb8a9501dbc37e3a542c05b",
+  "prompts": {},
+  "sessions": {
+    "s_b033eb0f14698a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cb3a-801f-7410-8b84-62d3597fc6ab",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
