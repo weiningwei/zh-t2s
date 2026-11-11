@@ -170,19 +170,32 @@
     const result = { t2s: [], s2t: [] };
     for (const direction of ['t2s', 's2t']) {
       const label = direction === 't2s' ? '繁→简' : '简→繁';
-      if (data[direction].length > DICTIONARY_LIMIT) throw new Error(label + '最多支持 1000 条规则。');
-      const seen = new Set();
-      for (const pair of data[direction]) {
-        if (!Array.isArray(pair) || pair.length !== 2 || pair.some((s) => typeof s !== 'string' || !s.trim())) {
-          throw new Error(label + '每条规则须包含非空的原词和替换词。');
-        }
-        if (pair[0].length > 256 || pair[1].length > 1024 || pair.some((s) => /[\r\n\t]/.test(s) || s.includes('=>') || s !== s.trim())) {
-          throw new Error(label + '原词最多 256 字符，替换词最多 1024 字符；不支持换行、制表符、=> 或首尾空格。');
-        }
-        if (seen.has(pair[0])) throw new Error(label + '存在重复原词：' + pair[0]);
-        seen.add(pair[0]);
-        result[direction].push([pair[0], pair[1]]);
+      if (data[direction].length > DICTIONARY_LIMIT) {
+        throw new Error(label + '最多支持 ' + DICTIONARY_LIMIT + ' 条规则。');
       }
+      const seen = new Set();
+      data[direction].forEach((pair, index) => {
+        const at = label + '第 ' + (index + 1) + ' 条';
+        if (!Array.isArray(pair) || pair.length !== 2 || pair.some((s) => typeof s !== 'string')) {
+          throw new Error(at + '须包含原词和替换词两个字符串。');
+        }
+        // 首尾空格静默去除（与编辑器内逐行解析的行为一致）
+        const source = pair[0].trim();
+        const target = pair[1].trim();
+        if (!source || !target) throw new Error(at + '的原词和替换词不能为空。');
+        if (source.length > 256 || target.length > 1024) {
+          throw new Error(at + '超出长度限制：原词最多 256、替换词最多 1024 个字符。');
+        }
+        if (/[\r\n\t]/.test(source) || /[\r\n\t]/.test(target)) {
+          throw new Error(at + '不支持换行或制表符，每条规则占一行。');
+        }
+        if (source.includes('=>') || target.includes('=>')) {
+          throw new Error(at + '的词内不支持「=>」，它只作分隔符。');
+        }
+        if (seen.has(source)) throw new Error(at + '原词重复：' + source);
+        seen.add(source);
+        result[direction].push([source, target]);
+      });
     }
     return result;
   }
