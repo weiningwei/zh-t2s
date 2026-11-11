@@ -1,4 +1,4 @@
-# 截图占位说明
+# 截图维护说明
 
 此目录用于存放 README 中引用的截图。
 
@@ -34,4 +34,4 @@ git commit -m "docs: add before/after screenshot"
 git push
 ```
 
-README 中的占位文字会自动替换为图片。
+README 已通过相对路径引用 `docs/before-after.png`；替换同名图片即可更新展示。

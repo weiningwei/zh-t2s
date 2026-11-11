@@ -263,12 +263,13 @@
 
   function saveDictionary(data) {
     const next = validateDictionary(data);
-    const tries = compileDictionary(next);
+    const { tries, nonHanStart } = buildDictionaryTries(next);
     // 持久化失败时保留草稿与现有配置，不显示成功。
     if (typeof GM_setValue !== 'function') throw new Error('当前环境不支持保存设置。');
     GM_setValue(DICTIONARY_KEY, next);
     dictionary = next;
     dictionaryTries = tries;
+    dictionaryNonHanStart = nonHanStart;
     if (effectiveState() !== 'off') applyState(state, state, true);
     refreshMenu();
   }
@@ -284,7 +285,7 @@
     }
   }
 
-  /** 其他页面保存词典后，本标签切回前台时按需同步并重扫 */
+  /** 切回前台或打开词典编辑器时，读取最新词典并按需重扫 */
   function syncDictionaryFromStorage() {
     const next = readStoredDictionary();
     if (!next || JSON.stringify(next) === JSON.stringify(dictionary)) return;
@@ -299,15 +300,15 @@
   try { channel = new BroadcastChannel('zh-t2s'); } catch (e) { channel = null; }
 
   // 会话级统计（页面刷新即重置，不持久化）
-  // chars: 实际改变字符数（仅当 OpenCC 输出 ≠ 输入时累加 text.length）
-  // time:  OpenCC 调用累计耗时（ms，performance.now 测量）
+  // chars: 输出改变的文本/属性原文长度累计（不逐字统计差异）
+  // time:  safeConvert 累计耗时，包含词典匹配与 OpenCC 转换（ms）
   let stats = { chars: 0, time: 0 };
 
   /* ============================================================
    * 2.2 快捷键配置（默认 F8/F9，持久化到 GM 存储）
    * ============================================================
    * F8 = 繁→简 方向开关，F9 = 简→繁 方向开关
-   * 通过菜单项"配置快捷键"进入捕获模式，下一次按键即新快捷键
+   * 兼容读取已保存的快捷键；当前不提供快捷键配置入口
    * 表单聚焦时不响应（input/textarea/contenteditable）
    * ============================================================ */
   const SHORTCUT_KEY_T2S = 'zh-t2s-shortcut-t2s';
@@ -361,7 +362,7 @@
    * 2.3 白名单（不转换名单，按域名匹配）
    * ============================================================
    * 名单中的域名不做任何转换，用于排除特定站点。
-   * 数据存 GM_setValue（字符串数组），菜单可加入/移出/清空。
+   * 数据存 GM_setValue（字符串数组），浮动面板可加入/移出/清空。
    * ============================================================ */
   const WHITELIST_KEY = 'zh-t2s-whitelist';
   let whitelist = []; // 域名数组，如 ['ptt.cc', 'youtube.com']
@@ -439,9 +440,9 @@
     return false;
   }
 
-  // CJK 预检：不含中日韩汉字的文本无需调用 OpenCC，直接跳过。
+  // 预检：无汉字且不可能命中自定义原词的文本直接跳过。
   // Unicode Han 覆盖扩展区生僻字；有词典时也检查原词首字符，支持非汉字规则。
-  // 命中率决定收益：典型网页 30-60% 文本节点为纯 ASCII（URL、数字、英文），可全部跳过。
+  // 未配置非汉字开头的规则时，纯 ASCII 文本无需逐字符检查词典。
   const HAS_CJK = /\p{Script=Han}/u;
 
   function mayConvertText(text) {
@@ -455,7 +456,7 @@
   }
 
   /** 可复用的 TreeWalker filter，避免每次 enqueueSubtree 新建对象；
-   *  CJK 预检前置：不含汉字的文本节点不入队，减少队列 30-60%。 */
+   *  预检前置：只收集含汉字或可能命中自定义词典的文本节点。 */
   const TEXT_FILTER = Object.freeze({
     acceptNode(node) {
       if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
@@ -904,8 +905,7 @@
         console.warn('[zh-t2s] 菜单注册失败:', caption, e);
       }
     }
-    // 仅保留顶层方向开关与"浮动按钮隐藏时"的兜底项；快捷键/白名单/统计/重置
-    // 已收进浮动按钮的「⚙ 设置」子面板，避免菜单过长（业界弹出层分层做法）。
+    // 菜单仅保留两个方向开关、重置与浮动按钮显隐；其余操作在浮动面板中。
     reg(menuCaptionT2S(), () => {
       setState(state === 't2s' ? 'off' : 't2s');
     });
@@ -1193,6 +1193,7 @@
   function openDictionaryEditor() {
     closeFloatPanel();
     if (dictionaryDialog) { dictionaryDialog.focus(); return; }
+    syncDictionaryFromStorage(); // 不依赖 visibilitychange，重新打开即可读取其他页面的修改
     const dialog = document.createElement('dialog');
     dialog.className = 'ignore-opencc';
     dialog.setAttribute('aria-label', '自定义词典');
@@ -1350,6 +1351,7 @@
         if (!dialog.isConnected) return;
         if (hasChanges() && !window.confirm('导入将替换两个方向的当前草稿，是否继续？')) return;
         fillEditors(data);
+        refreshPreview();
         showStatus('已导入两个方向的草稿，点击“保存并应用”后生效。');
       } catch (e) { showStatus('导入失败：' + e.message, true); }
       finally { fileInput.value = ''; }
@@ -1373,11 +1375,11 @@
     dialog.showModal();
   }
 
-  // 根据当前视图重绘面板内容（主视图 / 设置子视图）
+  // 重绘扁平面板；词典编辑器独立维护草稿。
   function renderFloatPanelContent() {
     if (!floatPanel) return;
     floatPanel.innerHTML = '';
-    // 全扁平主视图：页眉 + 方向分段 + 开关 + 白名单 + 重置 + 隐藏
+    // 页眉 + 方向/字形 + 开关 + 白名单 + 词典 + 重置 + 隐藏
     floatPanel.appendChild(floatPanelHeader());
     const seg = document.createElement('div');
     Object.assign(seg.style, {
@@ -1470,7 +1472,7 @@
    * 8.4 重置所有设置
    * ============================================================
    * 清除全部持久化偏好（词典、方向、繁体字形、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
-   * 沿用仓库约定（白名单变更亦 reload）以保证 DOM 与状态干净重启。
+   * 重置后刷新页面；白名单变更则使用 applyWhitelistChange 就地生效。
    * ============================================================ */
   function resetAllSettings() {
     if (!window.confirm('确定重置所有设置？\n将清除自定义词典、方向、繁体字形、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
