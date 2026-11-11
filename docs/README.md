@@ -1,37 +1,11 @@
-# 截图维护说明
+# 截图说明
 
-此目录用于存放 README 中引用的截图。
+[项目 README](../README.md) 引用本目录的 `before-after.png`，直接替换同名文件即可更新展示。
 
-## 需要的截图
+## 内容与规格
 
-### `before-after.png`
+- 使用同一段繁体网页，左侧展示原文，右侧展示繁→简结果；可用分屏或前后截图拼接。
+- 推荐 1200 × 600 px、PNG 格式，文件小于 500 KB。
+- 可使用系统截图工具或浏览器开发者工具截图。
 
-README 顶部效果演示图,用于社交分享时的 preview。
-
-**拍摄建议**:
-- 选一个繁体网页(推荐 zh.wikipedia.org 某词条页)
-- 浏览器全屏,左右分屏对比
-  - 左:未开启脚本(繁体原文)
-  - 右:开启脚本后(简体)
-- 或用前后滚动截图拼接
-
-**技术规格**:
-- 尺寸:1200×600 px(2:1 横图,社交卡片友好)
-- 格式:PNG
-- 压缩后 < 500KB(可用 tinypng.com)
-
-**拍摄工具**:
-- Windows:Win + Shift + S(截图)或 ShareX
-- 浏览器:DevTools → Toggle device toolbar → 截图
-
-## 提交方式
-
-拍好后放入此目录,文件名 `before-after.png`,然后:
-
-```bash
-git add docs/before-after.png
-git commit -m "docs: add before/after screenshot"
-git push
-```
-
-README 已通过相对路径引用 `docs/before-after.png`；替换同名图片即可更新展示。
+更换后确认图片中的文字清晰、两侧内容对应，再单独提交图片变更。源码修改与发布流程见 [维护说明](DEVELOPMENT.md)。
