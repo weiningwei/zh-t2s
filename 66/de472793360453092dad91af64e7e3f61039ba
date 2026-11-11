@@ -1,0 +1,30 @@
+zh-t2s.user.js
+  s_2e7927dada368f::t_95ff5831f79641 34,50
+  s_2e7927dada368f::t_a6b585a2672e2b 36,39,53-56,107,110,120-121,125-127
+  s_2e7927dada368f::t_05459d5ad21b3d 643-644,694,801
+  s_2e7927dada368f::t_0a83c66d9723f0 552,564-565,572,578,604-616,622-623
+  s_2e7927dada368f::t_5a1fdba4aeb2d6 1024-1044,1101,1105,1109,1125
+  s_2e7927dada368f::t_72cb2566790953 128
+README.md
+  s_2e7927dada368f::t_95ff5831f79641 72
+  s_2e7927dada368f::t_b68b0626a53ba9 24,39,47,78-79,87,137
+CHANGELOG.md
+  s_2e7927dada368f::t_e3236c1697b9d2 7
+  s_2e7927dada368f::t_b68b0626a53ba9 8-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66de472793360453092dad91af64e7e3f61039ba",
+  "prompts": {},
+  "sessions": {
+    "s_2e7927dada368f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cb0b-cc73-75f0-a05e-83c24c1301e9",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
