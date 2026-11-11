@@ -223,6 +223,25 @@
     return tries;
   }
 
+  // 规则行分隔符：Tab（表格粘贴）、半角 =>、全角 ＝＞、半角 ->、箭头 →
+  const DICTIONARY_SEPARATORS = ['\t', '=>', '＝＞', '＝>', '->', '→'];
+
+  /** 按最靠前的分隔符切分规则行；找不到分隔符返回 null */
+  function splitDictionaryLine(line) {
+    let pos = -1;
+    let sepLength = 0;
+    for (const separator of DICTIONARY_SEPARATORS) {
+      const at = line.indexOf(separator);
+      if (at < 0) continue;
+      if (pos < 0 || at < pos || (at === pos && separator.length > sepLength)) {
+        pos = at;
+        sepLength = separator.length;
+      }
+    }
+    if (pos < 0) return null;
+    return [line.slice(0, pos), line.slice(pos + sepLength)];
+  }
+
   try {
     if (typeof GM_getValue === 'function') {
       dictionary = validateDictionary(GM_getValue(DICTIONARY_KEY, dictionary));
@@ -1189,7 +1208,7 @@
       </style>
       <div class="body">
         <h2>自定义词典</h2>
-        <p>每行填写：原词 =&gt; 替换为。左右相同可保留原词；删除整行即可删除规则。</p>
+        <p>每行填写：原词 =&gt; 替换为。分隔符也可用 -&gt;、→、＝＞ 或 Tab（可直接从表格粘贴）；左右相同可保留原词，删除整行即可删除规则。</p>
         <p class="hint">全站生效，两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
         <div class="tabs">
           <button type="button" data-direction="t2s" aria-pressed="true">繁→简</button>
@@ -1197,7 +1216,7 @@
         </div>
         <textarea aria-label="繁转简词典" data-editor="t2s" spellcheck="false" placeholder="滑鼠 => 鼠标&#10;乾隆 => 乾隆"></textarea>
         <textarea aria-label="简转繁词典" data-editor="s2t" spellcheck="false" placeholder="头发 => 頭髮&#10;某人名 => 某人名" hidden></textarea>
-        <p class="hint">首尾空格会去除，不支持换行、制表符或 =&gt; 出现在词内。不使用正则表达式。</p>
+        <p class="hint">首尾空格会去除；词内不能含 =&gt; 或制表符；每条规则占一行，不使用正则表达式。</p>
         <div class="status" role="status" aria-live="polite"></div>
         <input type="file" accept=".json,application/json" hidden>
         <div class="actions">
@@ -1224,13 +1243,15 @@
     function readEditors() {
       const data = { t2s: [], s2t: [] };
       for (const direction of ['t2s', 's2t']) {
+        const label = direction === 't2s' ? '繁→简' : '简→繁';
         const lines = editors[direction].value.split(/\r?\n/);
         lines.forEach((line, index) => {
           if (!line.trim()) return;
-          const separator = line.includes('\t') ? '\t' : '=>';
-          const pos = line.indexOf(separator);
-          if (pos < 0) throw new Error((direction === 't2s' ? '繁→简' : '简→繁') + '第 ' + (index + 1) + ' 行缺少 => 分隔符。');
-          data[direction].push([line.slice(0, pos).trim(), line.slice(pos + separator.length).trim()]);
+          const parts = splitDictionaryLine(line);
+          if (!parts) {
+            throw new Error(label + '第 ' + (index + 1) + ' 行缺少分隔符，可用 =>、->、→、＝＞，或从表格粘贴（Tab 分隔）。');
+          }
+          data[direction].push([parts[0].trim(), parts[1].trim()]);
         });
       }
       return validateDictionary(data);
