@@ -222,6 +222,27 @@
     refreshMenu();
   }
 
+  /** 读取存储中的词典；不可用或校验失败时返回 null */
+  function readStoredDictionary() {
+    try {
+      if (typeof GM_getValue !== 'function') return null;
+      return validateDictionary(GM_getValue(DICTIONARY_KEY, dictionary));
+    } catch (e) {
+      console.warn('[zh-t2s] 自定义词典读取失败。', e);
+      return null;
+    }
+  }
+
+  /** 其他页面保存词典后，本标签切回前台时按需同步并重扫 */
+  function syncDictionaryFromStorage() {
+    const next = readStoredDictionary();
+    if (!next || JSON.stringify(next) === JSON.stringify(dictionary)) return;
+    dictionary = next;
+    dictionaryTries = compileDictionary(next);
+    if (effectiveState() !== 'off') applyState(state, state, true);
+    refreshMenu();
+  }
+
   // 跨标签页同步（同源标签页之间实时同步状态；@noframes 已禁止 iframe 运行本脚本）
   let channel = null;
   try { channel = new BroadcastChannel('zh-t2s'); } catch (e) { channel = null; }
@@ -729,6 +750,12 @@
     });
   }
 
+  // 词典不走广播：BroadcastChannel 仅同源，而词典全站生效；
+  // 其他页面保存后，本标签在切回前台时读取存储按需同步，只重扫真正用到的标签。
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncDictionaryFromStorage();
+  });
+
   /* ============================================================
    * 8. 油猴菜单项：两个互斥项（繁→简 / 简→繁）
    * ============================================================
@@ -1206,8 +1233,14 @@
     dialog.addEventListener('cancel', (e) => { e.preventDefault(); cancel(); });
     dialog.addEventListener('close', () => { dictionaryDialog = null; dialog.remove(); });
     root.querySelector('[data-action="save"]').addEventListener('click', () => {
-      try { saveDictionary(readEditors()); dialog.close(); }
-      catch (e) { showStatus('保存失败：' + e.message, true); }
+      try {
+        // 打开编辑器后若存储已被其他页面改写，先确认再覆盖，避免静默丢失对方改动
+        const stored = readStoredDictionary();
+        if (stored && JSON.stringify(stored) !== initialDraft &&
+            !window.confirm('词典已在其他页面更新，继续保存会覆盖对方的修改。\n建议先取消并重新打开编辑器查看最新内容。确定覆盖吗？')) return;
+        saveDictionary(readEditors());
+        dialog.close();
+      } catch (e) { showStatus('保存失败：' + e.message, true); }
     });
     const fileInput = root.querySelector('input[type="file"]');
     root.querySelector('[data-action="import"]').addEventListener('click', () => fileInput.click());
