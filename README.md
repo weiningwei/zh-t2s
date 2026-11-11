@@ -5,7 +5,7 @@
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安装-670000?logo=greasyfork&logoColor=white)](https://greasyfork.org/zh-CN/scripts/585653-%E7%B9%81%E8%BD%AC%E7%AE%80-zh-t2s)
 [![GitHub](https://img.shields.io/badge/GitHub-源码-181717?logo=github&logoColor=white)](https://github.com/weiningwei/zh-t2s)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.12.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.12.1-green)](CHANGELOG.md)
 
 ![繁体网页转换前后对比](docs/before-after.png)
 
