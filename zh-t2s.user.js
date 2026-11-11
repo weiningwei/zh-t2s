@@ -59,7 +59,34 @@
   /** 包裹一层异常保护，避免转换器异常时影响页面或观察者 */
   function safeConvert(text) {
     if (!convert) return text;
-    try { return convert(text); }
+    try {
+      const root = dictionaryTries[state];
+      if (!root || root.size === 0) return convert(text);
+      const parts = [];
+      let plainStart = 0;
+      for (let i = 0; i < text.length;) {
+        let branch = root;
+        let end = i;
+        let replacement;
+        for (let j = i; j < text.length; j++) {
+          const entry = branch.get(text[j]);
+          if (!entry) break;
+          if (entry.value !== undefined) {
+            end = j + 1;
+            replacement = entry.value;
+          }
+          branch = entry.next;
+        }
+        if (replacement === undefined) { i++; continue; }
+        if (plainStart < i) parts.push(convert(text.slice(plainStart, i)));
+        parts.push(replacement); // 用户结果为最终输出，不再转换或连锁替换
+        i = end;
+        plainStart = end;
+      }
+      if (plainStart === 0) return convert(text);
+      if (plainStart < text.length) parts.push(convert(text.slice(plainStart)));
+      return parts.join('');
+    }
     catch (e) { return text; }
   }
 
@@ -128,6 +155,71 @@
     const style = traditionalStyle === 'hk' ? 'hk' : 'tw';
     return converters.s2t[style] ||
       (converters.s2t[style] = OpenCC.Converter({ from: 'cn', to: style }));
+  }
+
+  /* 2.1.1 用户词典：按方向覆盖原文，预编译 Trie，同位置最长词优先。 */
+  const DICTIONARY_KEY = 'zh-t2s-dictionary';
+  const DICTIONARY_LIMIT = 1000; // 每方向上限，控制持久化与匹配开销
+  let dictionary = { t2s: [], s2t: [] };
+  let dictionaryTries = { t2s: new Map(), s2t: new Map() };
+
+  function validateDictionary(data) {
+    if (!data || !Array.isArray(data.t2s) || !Array.isArray(data.s2t)) {
+      throw new Error('词典须包含 t2s 和 s2t 两组规则。');
+    }
+    const result = { t2s: [], s2t: [] };
+    for (const direction of ['t2s', 's2t']) {
+      const label = direction === 't2s' ? '繁→简' : '简→繁';
+      if (data[direction].length > DICTIONARY_LIMIT) throw new Error(label + '最多支持 1000 条规则。');
+      const seen = new Set();
+      for (const pair of data[direction]) {
+        if (!Array.isArray(pair) || pair.length !== 2 || pair.some((s) => typeof s !== 'string' || !s.trim())) {
+          throw new Error(label + '每条规则须包含非空的原词和替换词。');
+        }
+        if (pair[0].length > 256 || pair[1].length > 1024 || pair.some((s) => /[\r\n\t]/.test(s) || s.includes('=>') || s !== s.trim())) {
+          throw new Error(label + '原词最多 256 字符，替换词最多 1024 字符；不支持换行、制表符、=> 或首尾空格。');
+        }
+        if (seen.has(pair[0])) throw new Error(label + '存在重复原词：' + pair[0]);
+        seen.add(pair[0]);
+        result[direction].push([pair[0], pair[1]]);
+      }
+    }
+    return result;
+  }
+
+  function compileDictionary(data) {
+    const tries = { t2s: new Map(), s2t: new Map() };
+    for (const direction of ['t2s', 's2t']) {
+      for (const [source, target] of data[direction]) {
+        let branch = tries[direction];
+        for (let i = 0; i < source.length; i++) {
+          if (!branch.has(source[i])) branch.set(source[i], { next: new Map() });
+          const entry = branch.get(source[i]);
+          if (i === source.length - 1) entry.value = target;
+          branch = entry.next;
+        }
+      }
+    }
+    return tries;
+  }
+
+  try {
+    if (typeof GM_getValue === 'function') {
+      dictionary = validateDictionary(GM_getValue(DICTIONARY_KEY, dictionary));
+      dictionaryTries = compileDictionary(dictionary);
+    }
+  } catch (e) { console.warn('[zh-t2s] 自定义词典读取失败，使用空词典。', e); }
+
+  function saveDictionary(data) {
+    const next = validateDictionary(data);
+    const tries = compileDictionary(next);
+    // 持久化失败时保留草稿与现有配置，不显示成功。
+    if (typeof GM_setValue !== 'function') throw new Error('当前环境不支持保存设置。');
+    GM_setValue(DICTIONARY_KEY, next);
+    dictionary = next;
+    dictionaryTries = tries;
+    if (effectiveState() !== 'off') applyState(state, state, true);
+    refreshMenu();
   }
 
   // 跨标签页同步（同源标签页之间实时同步状态；@noframes 已禁止 iframe 运行本脚本）
@@ -276,16 +368,24 @@
   }
 
   // CJK 预检：不含中日韩汉字的文本无需调用 OpenCC，直接跳过。
-  // 覆盖基本区(\u4e00-\u9fff)与扩展A区(\u3400-\u4dbf)，足以判定"是否有可转换汉字"。
+  // Unicode Han 覆盖扩展区生僻字；有词典时也检查原词首字符，支持非汉字规则。
   // 命中率决定收益：典型网页 30-60% 文本节点为纯 ASCII（URL、数字、英文），可全部跳过。
-  const HAS_CJK = /[\u4e00-\u9fff\u3400-\u4dbf]/;
+  const HAS_CJK = /\p{Script=Han}/u;
+
+  function mayConvertText(text) {
+    if (HAS_CJK.test(text)) return true;
+    const root = dictionaryTries[state];
+    if (!root || root.size === 0) return false;
+    for (let i = 0; i < text.length; i++) if (root.has(text[i])) return true;
+    return false;
+  }
 
   /** 可复用的 TreeWalker filter，避免每次 enqueueSubtree 新建对象；
    *  CJK 预检前置：不含汉字的文本节点不入队，减少队列 30-60%。 */
   const TEXT_FILTER = Object.freeze({
     acceptNode(node) {
       if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-      if (!HAS_CJK.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+      if (!mayConvertText(node.nodeValue)) return NodeFilter.FILTER_REJECT;
       if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }
@@ -295,7 +395,7 @@
     const text = node.nodeValue;
     if (!text) return;
     if (textState.get(node) === text) return;          // 自己上次写入的值，无外部改动
-    if (!textOriginal.has(node)) textOriginal.set(node, text); // 记录原始值，供关闭时还原
+    textOriginal.set(node, text); // 非自写回值是页面最新原文，供关闭/修改词典时还原
     const t1 = performance.now();
     const out = safeConvert(text);
     stats.time += performance.now() - t1;
@@ -319,8 +419,8 @@
       const val = el.getAttribute(attr);
       if (val == null) continue;
       if (map.get(attr) === val) continue;              // 自己上次写入的值
-      if (!HAS_CJK.test(val)) { map.set(attr, val); continue; } // 预检：无汉字直接跳过
-      if (!origMap.has(attr)) origMap.set(attr, val);   // 记录原始值
+      if (!mayConvertText(val)) { map.set(attr, val); origMap.delete(attr); continue; }
+      origMap.set(attr, val);                         // 页面最新原文
       const ta = performance.now();
       const out = safeConvert(val);
       stats.time += performance.now() - ta;
@@ -464,7 +564,7 @@
       if (m.type === 'characterData') {
         if (m.target && m.target.nodeType === Node.TEXT_NODE) {
           if (textState.get(m.target) === m.target.nodeValue) continue; // 自写回的值，跳过
-          if (!HAS_CJK.test(m.target.nodeValue)) continue; // 非 CJK 字符变更不入队
+          if (!mayConvertText(m.target.nodeValue)) continue;
           if (shouldSkipText(m.target)) continue;
           queue.add(m.target);
         }
@@ -553,7 +653,7 @@
   }
 
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
-  function applyState(oldState, newState, styleChanged = false) {
+  function applyState(oldState, newState, conversionChanged = false) {
     const wasActive = oldState !== 'off';
     const isActive = newState !== 'off';
     const directionChanged = wasActive && isActive && oldState !== newState;
@@ -565,8 +665,8 @@
       scheduled = false;
       restoreAll();
       clearAllState();
-    } else if ((directionChanged || styleChanged) && hasOpenCC) {
-      // 方向或繁体字形切换：还原原文，再用新转换器重扫
+    } else if ((directionChanged || conversionChanged) && hasOpenCC) {
+      // 方向、繁体字形或词典改变：还原原文，再按新配置重扫
       observer.disconnect();
       queue.clear();
       scheduled = false;
@@ -757,6 +857,7 @@
    * 表单聚焦时（input/textarea/contenteditable）不响应。
    * ============================================================ */
   document.addEventListener('keydown', (e) => {
+    if (dictionaryDialog && dictionaryDialog.open) return; // Shadow DOM 内编辑时同样抑制转换快捷键
     const ae = document.activeElement;
     const inForm = ae && (
       ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
@@ -1007,6 +1108,141 @@
     return h;
   }
 
+  // 独立模态编辑器：不随 refreshMenu 重绘，草稿只在保存时写入 GM 存储。
+  let dictionaryDialog = null;
+  function openDictionaryEditor() {
+    closeFloatPanel();
+    if (dictionaryDialog) { dictionaryDialog.focus(); return; }
+    const dialog = document.createElement('dialog');
+    dialog.className = 'ignore-opencc';
+    dialog.setAttribute('aria-label', '自定义词典');
+    Object.assign(dialog.style, {
+      width: '560px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
+      boxSizing: 'border-box', padding: '0', border: '1px solid #dce2eb', borderRadius: '14px',
+      background: '#fff', color: '#1f2329', boxShadow: '0 16px 64px #0005', overflow: 'auto'
+    });
+    const host = document.createElement('div');
+    dialog.appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        *{box-sizing:border-box} [hidden]{display:none!important}
+        .body{padding:20px;font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif;color:#1f2329;background:#fff}
+        h2{font-size:18px;margin:0 0 8px} p{margin:8px 0;color:#596579;font-size:13px}
+        .tabs,.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+        button{font:inherit;border:1px solid #d4dce8;border-radius:8px;padding:7px 12px;background:#f6f8fb;color:#263449;cursor:pointer}
+        button[aria-pressed="true"],.save{background:#2f6bff;color:#fff;border-color:#2f6bff}
+        button:focus-visible,textarea:focus-visible{outline:2px solid #2f6bff;outline-offset:2px}
+        textarea{display:block;width:100%;height:220px;resize:vertical;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:14px/1.7 ui-monospace,monospace;background:#fff;color:#1f2329}
+        .status{min-height:24px;color:#596579;white-space:pre-wrap;overflow-wrap:anywhere}
+        .status[data-error="true"]{color:#b42318}
+        .actions{justify-content:flex-end}.hint{font-size:12px}
+      </style>
+      <div class="body">
+        <h2>自定义词典</h2>
+        <p>每行填写：原词 =&gt; 替换为。左右相同可保留原词；删除整行即可删除规则。</p>
+        <p class="hint">全站生效，两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
+        <div class="tabs">
+          <button type="button" data-direction="t2s" aria-pressed="true">繁→简</button>
+          <button type="button" data-direction="s2t" aria-pressed="false">简→繁（台湾／香港共用）</button>
+        </div>
+        <textarea aria-label="繁转简词典" data-editor="t2s" spellcheck="false" placeholder="滑鼠 => 鼠标&#10;乾隆 => 乾隆"></textarea>
+        <textarea aria-label="简转繁词典" data-editor="s2t" spellcheck="false" placeholder="头发 => 頭髮&#10;某人名 => 某人名" hidden></textarea>
+        <p class="hint">首尾空格会去除，不支持换行、制表符或 =&gt; 出现在词内。不使用正则表达式。</p>
+        <div class="status" role="status" aria-live="polite"></div>
+        <input type="file" accept=".json,application/json" hidden>
+        <div class="actions">
+          <button type="button" data-action="import">导入 JSON</button>
+          <button type="button" data-action="export">导出 JSON</button>
+          <button type="button" data-action="cancel">取消</button>
+          <button type="button" class="save" data-action="save">保存并应用</button>
+        </div>
+      </div>`;
+    const editors = {
+      t2s: root.querySelector('[data-editor="t2s"]'),
+      s2t: root.querySelector('[data-editor="s2t"]')
+    };
+    const status = root.querySelector('.status');
+    function showStatus(message, error = false) {
+      status.textContent = message;
+      status.dataset.error = String(error);
+    }
+    function fillEditors(data) {
+      for (const direction of ['t2s', 's2t']) {
+        editors[direction].value = data[direction].map(([a, b]) => a + ' => ' + b).join('\n');
+      }
+    }
+    function readEditors() {
+      const data = { t2s: [], s2t: [] };
+      for (const direction of ['t2s', 's2t']) {
+        const lines = editors[direction].value.split(/\r?\n/);
+        lines.forEach((line, index) => {
+          if (!line.trim()) return;
+          const separator = line.includes('\t') ? '\t' : '=>';
+          const pos = line.indexOf(separator);
+          if (pos < 0) throw new Error((direction === 't2s' ? '繁→简' : '简→繁') + '第 ' + (index + 1) + ' 行缺少 => 分隔符。');
+          data[direction].push([line.slice(0, pos).trim(), line.slice(pos + separator.length).trim()]);
+        });
+      }
+      return validateDictionary(data);
+    }
+    fillEditors(dictionary);
+    const initialDraft = JSON.stringify(dictionary);
+    function hasChanges() {
+      try { return JSON.stringify(readEditors()) !== initialDraft; }
+      catch (e) { return true; }
+    }
+    function cancel() {
+      if (!hasChanges() || window.confirm('放弃尚未保存的词典修改？')) dialog.close();
+    }
+    root.querySelectorAll('[data-direction]').forEach((button) => {
+      button.addEventListener('click', () => {
+        root.querySelectorAll('[data-direction]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+        for (const direction of ['t2s', 's2t']) editors[direction].hidden = direction !== button.dataset.direction;
+        editors[button.dataset.direction].focus();
+      });
+    });
+    root.querySelector('[data-action="cancel"]').addEventListener('click', cancel);
+    dialog.addEventListener('cancel', (e) => { e.preventDefault(); cancel(); });
+    dialog.addEventListener('close', () => { dictionaryDialog = null; dialog.remove(); });
+    root.querySelector('[data-action="save"]').addEventListener('click', () => {
+      try { saveDictionary(readEditors()); dialog.close(); }
+      catch (e) { showStatus('保存失败：' + e.message, true); }
+    });
+    const fileInput = root.querySelector('input[type="file"]');
+    root.querySelector('[data-action="import"]').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async () => {
+      try {
+        const file = fileInput.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) throw new Error('文件不能超过 2 MB。');
+        const data = validateDictionary(JSON.parse(await file.text()));
+        if (!dialog.isConnected) return;
+        if (hasChanges() && !window.confirm('导入将替换两个方向的当前草稿，是否继续？')) return;
+        fillEditors(data);
+        showStatus('已导入两个方向的草稿，点击“保存并应用”后生效。');
+      } catch (e) { showStatus('导入失败：' + e.message, true); }
+      finally { fileInput.value = ''; }
+    });
+    root.querySelector('[data-action="export"]').addEventListener('click', () => {
+      try {
+        const data = readEditors();
+        const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'zh-t2s-dictionary.json';
+        root.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        showStatus('已导出当前草稿；尚未保存的修改需点击“保存并应用”。');
+      } catch (e) { showStatus('导出失败：' + e.message, true); }
+    });
+    document.documentElement.appendChild(dialog);
+    dictionaryDialog = dialog;
+    dialog.showModal();
+  }
+
   // 根据当前视图重绘面板内容（主视图 / 设置子视图）
   function renderFloatPanelContent() {
     if (!floatPanel) return;
@@ -1061,6 +1297,7 @@
       floatPanel.appendChild(floatPanelRow('🗑 白名单为空', null, { muted: true }));
     }
     floatPanel.appendChild(floatPanelDivider());
+    floatPanel.appendChild(floatPanelRow('📖 自定义词典（' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条）', openDictionaryEditor));
     floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
     floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
   }
@@ -1102,14 +1339,15 @@
   /* ============================================================
    * 8.4 重置所有设置
    * ============================================================
-   * 清除全部持久化偏好（方向、繁体字形、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
+   * 清除全部持久化偏好（词典、方向、繁体字形、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
    * 沿用仓库约定（白名单变更亦 reload）以保证 DOM 与状态干净重启。
    * ============================================================ */
   function resetAllSettings() {
-    if (!window.confirm('确定重置所有设置？\n将清除方向、繁体字形、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
+    if (!window.confirm('确定重置所有设置？\n将清除自定义词典、方向、繁体字形、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
     try {
       if (typeof GM_setValue === 'function') {
         GM_setValue(STATE_KEY, 't2s');
+        GM_setValue(DICTIONARY_KEY, { t2s: [], s2t: [] });
         GM_setValue(TRAD_STYLE_KEY, 'tw');
         GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
