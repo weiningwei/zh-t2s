@@ -1300,7 +1300,7 @@
       if (!hasOpenCC) { previewOut.textContent = '转换引擎未加载，无法预览。'; return; }
       let draft;
       try { draft = readEditors(); }
-      catch (e) { previewOut.textContent = '规则有误：' + e.message; return; }
+      catch (e) { previewOut.textContent = '规则有误，无法预览。'; showStatus(e.message, true); return; }
       const key = JSON.stringify(draft);
       if (!previewCache.tries || previewCache.key !== key) {
         previewCache = { key, tries: buildDictionaryTries(draft).tries };
@@ -1312,11 +1312,21 @@
         previewOut.textContent = applyDictionary(sample, convertFn, previewCache.tries[direction]);
       } catch (e) { previewOut.textContent = '预览失败：' + e.message; }
     }
+    /** 独立于预览的输入反馈：解析成功显示条数，失败显示首条错误 */
+    function refreshValidationFeedback() {
+      let draft;
+      try { draft = readEditors(); }
+      catch (e) { showStatus(e.message, true); return; }
+      const total = draft.t2s.length + draft.s2t.length;
+      if (!total) { showStatus('还没有规则。每行一条：原词 => 替换。'); return; }
+      showStatus('已识别 ' + total + ' 条规则（繁→简 ' + draft.t2s.length + ' 条，简→繁 ' + draft.s2t.length + ' 条）。');
+    }
+    refreshValidationFeedback();
     previewInput.addEventListener('input', refreshPreview);
     for (const direction of ['t2s', 's2t']) {
       editors[direction].addEventListener('input', () => {
         clearTimeout(previewTimer);
-        previewTimer = setTimeout(refreshPreview, 300);
+        previewTimer = setTimeout(() => { refreshValidationFeedback(); refreshPreview(); }, 300);
       });
     }
     root.querySelectorAll('[data-direction]').forEach((button) => {
