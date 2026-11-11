@@ -1224,7 +1224,7 @@
       </style>
       <div class="body">
         <h2>自定义词典</h2>
-        <p>每行填写：原词 =&gt; 替换为。分隔符也可用 -&gt;、→、＝＞ 或 Tab（可直接从表格粘贴）；左右相同可保留原词，删除整行即可删除规则。</p>
+        <p>每行填写：原词 =&gt; 替换为。分隔符也可用 -&gt;、→、＝＞；从表格复制的两列可直接粘贴（Tab 自动识别）。左右相同可保留原词，删除整行即可删除规则。</p>
         <p class="hint">全站生效，两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
         <div class="tabs">
           <button type="button" data-direction="t2s" aria-pressed="true">繁→简</button>
@@ -1269,7 +1269,7 @@
           if (!line.trim()) return;
           const parts = splitDictionaryLine(line);
           if (!parts) {
-            throw new Error(label + '第 ' + (index + 1) + ' 行缺少分隔符，可用 =>、->、→、＝＞，或从表格粘贴（Tab 分隔）。');
+            throw new Error(label + '第 ' + (index + 1) + ' 行缺少分隔符，可用 =>、->、→、＝＞，或从表格粘贴。');
           }
           data[direction].push([parts[0].trim(), parts[1].trim()]);
         });
