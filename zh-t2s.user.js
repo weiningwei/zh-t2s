@@ -31,12 +31,12 @@
    * ============================================================
    * 使用 opencc-js（纯 JS 版 OpenCC），通过 @require 从 CDN 注入，
    * 字典在构建时已打包进脚本，运行时无需再请求字典文件。
-   * 同时构造两个方向的 converter 并缓存：
+   * 同时构造繁→简与两种简→繁 converter 并缓存：
    *   - t2s: from 't' -> to 'cn'（OpenCC 标准 t2s，繁→简）
-   *   - s2t: from 'cn' -> to 'tw'（简→繁，目标为台湾常用字形）
+   *   - s2t: from 'cn' -> to 'tw'/'hk'（简→繁，按用户选择输出台湾/香港字形）
    *     目标不用 't'：OpenCC 标准 s2t 偏正体/旧字形，会把 吃 转成 喫、
    *     这里 转成 這裏、刚才 转成 剛纔 等（见 issue #1），逐字比对共 62 字。
-   *     'tw' 仅叠加台湾字形表，不做用词转换（软件 仍为 軟件）。
+   *     'tw'/'hk' 仅叠加地区字形表，不做用词转换（软件 仍为 軟件）。
    * 仅做字形繁简转换，不改变地区用词（如"軟體"不会变成"软件"）。
    * 内置 mmseg 短语分词，可依据上下文解决一对多映射
    *   例（t2s）：乾隆 不被误转为 干隆
@@ -47,10 +47,13 @@
   if (!hasOpenCC) {
     console.warn('[zh-t2s] opencc-js 未加载，繁简转换已禁用（请检查网络或 @require 地址）。');
   }
-  // 字典在 opencc-js 模块级共享，两个 converter 实例仅配置对象，内存增量可忽略
+  // 字典在 opencc-js 模块级共享，三个 converter 实例仅配置对象，内存增量可忽略
   const converters = hasOpenCC ? {
     t2s: OpenCC.Converter({ from: 't', to: 'cn' }),
-    s2t: OpenCC.Converter({ from: 'cn', to: 'tw' })
+    s2t: {
+      tw: OpenCC.Converter({ from: 'cn', to: 'tw' }),
+      hk: OpenCC.Converter({ from: 'cn', to: 'hk' })
+    }
   } : {};
   let convert = hasOpenCC ? converters.t2s : null; // 当前活跃 converter，由 setState 切换
 
@@ -101,8 +104,10 @@
    * ============================================================ */
   const STATE_KEY = 'zh-t2s-enabled'; // 保留 key，避免旧用户偏好丢失
   const LAST_DIR_KEY = 'zh-t2s-lastdir'; // 关闭前方向，跨刷新沿用
+  const TRAD_STYLE_KEY = 'zh-t2s-traditional-style'; // 简→繁字形：台湾或香港
   let state = 't2s'; // 'off' | 't2s' | 's2t'
   let lastDirection = 't2s'; // 关闭前最后使用的方向，再次开启时沿用
+  let traditionalStyle = 'tw'; // 'tw' | 'hk'，默认台湾字形
   try {
     if (typeof GM_getValue === 'function') {
       const saved = GM_getValue(STATE_KEY, 't2s');
@@ -112,8 +117,14 @@
       else state = 't2s';                         // 't2s' / '1' / 未知值 → 默认繁→简
       const ld = GM_getValue(LAST_DIR_KEY, null);
       if (ld === 's2t' || ld === 't2s') lastDirection = ld;
+      const savedStyle = GM_getValue(TRAD_STYLE_KEY, 'tw');
+      if (savedStyle === 'tw' || savedStyle === 'hk') traditionalStyle = savedStyle;
     }
   } catch (e) { /* 读取失败保持默认开启 */ }
+
+  function converterForState(direction) {
+    return direction === 's2t' ? converters.s2t[traditionalStyle] : converters.t2s;
+  }
 
   // 跨标签页同步（同源标签页之间实时同步状态；@noframes 已禁止 iframe 运行本脚本）
   let channel = null;
@@ -538,7 +549,7 @@
   }
 
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
-  function applyState(oldState, newState) {
+  function applyState(oldState, newState, styleChanged = false) {
     const wasActive = oldState !== 'off';
     const isActive = newState !== 'off';
     const directionChanged = wasActive && isActive && oldState !== newState;
@@ -550,21 +561,21 @@
       scheduled = false;
       restoreAll();
       clearAllState();
-    } else if (directionChanged && hasOpenCC) {
-      // 方向切换：必须还原 + 清空 state + 用新方向重扫
+    } else if ((directionChanged || styleChanged) && hasOpenCC) {
+      // 方向或繁体字形切换：还原原文，再用新转换器重扫
       observer.disconnect();
       queue.clear();
       scheduled = false;
       restoreAll();
       clearAllState();
       stats = { chars: 0, time: 0 };                    // 统计清零（还原+重转会让数字失真）
-      convert = converters[newState];
+      convert = converterForState(newState);
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     } else if (!wasActive && isActive && hasOpenCC) {
       // 从关闭到开启（同方向）
-      convert = converters[newState];
+      convert = converterForState(newState);
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       enqueueSubtree(document.documentElement);
       scheduleIdle();
@@ -590,11 +601,26 @@
     }
   }
 
+  function setTraditionalStyle(newStyle) {
+    if ((newStyle !== 'tw' && newStyle !== 'hk') || traditionalStyle === newStyle) return;
+    traditionalStyle = newStyle;
+    try { if (typeof GM_setValue === 'function') GM_setValue(TRAD_STYLE_KEY, newStyle); } catch (e) {}
+    if (state === 's2t' && !isWhitelisted && hasOpenCC) {
+      applyState(state, state, true);
+    }
+    refreshMenu();
+    if (channel) {
+      try { channel.postMessage({ type: 'zh-t2s-traditional-style', style: newStyle }); } catch (e) {}
+    }
+  }
+
   // 同源标签页之间同步状态（@noframes 已禁止 iframe 运行本脚本）
   if (channel) {
     channel.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'zh-t2s-state' && e.data.state !== state) {
         setState(e.data.state); // setState 开头会判等防回环
+      } else if (e.data && e.data.type === 'zh-t2s-traditional-style') {
+        setTraditionalStyle(e.data.style);
       }
     });
   }
@@ -614,7 +640,8 @@
   }
   function menuCaptionS2T() {
     const sc = formatShortcut(shortcutS2T);
-    return effectiveState() === 's2t' ? `✅ 简→繁 [${sc}]` : `⏸ 简→繁 [${sc}]`;
+    const style = traditionalStyle === 'hk' ? '香港' : '台湾';
+    return effectiveState() === 's2t' ? `✅ 简→繁·${style} [${sc}]` : `⏸ 简→繁·${style} [${sc}]`;
   }
   function menuCaptionStats() {
     // 耗时显示：小于 10ms 显示 1 位小数，否则取整
@@ -664,7 +691,7 @@
       }
     } else {
       if (state !== 'off' && hasOpenCC) {
-        convert = converters[state];
+        convert = converterForState(state);
         observer.observe(document.documentElement, OBSERVER_OPTIONS);
         enqueueSubtree(document.documentElement);
         scheduleIdle();
@@ -771,7 +798,7 @@
     if (state === 'off') return { icon: '⚪', label: '已关闭', on: false };
     return state === 't2s'
       ? { icon: '🟢', label: '繁→简', on: true }
-      : { icon: '🟢', label: '简→繁', on: true };
+      : { icon: '🟢', label: '简→繁·' + (traditionalStyle === 'hk' ? '港' : '台'), on: true };
   }
 
   // 注入浮动 UI 样式表（唯一 class 前缀 zh-t2s-，不与页面样式冲突）。
@@ -994,6 +1021,27 @@
     seg.appendChild(s1);
     seg.appendChild(s2);
     floatPanel.appendChild(seg);
+    if (state === 's2t') {
+      const styleRow = document.createElement('div');
+      Object.assign(styleRow.style, { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' });
+      const styleLabel = document.createElement('span');
+      styleLabel.textContent = '繁体字形';
+      Object.assign(styleLabel.style, { fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap' });
+      styleRow.appendChild(styleLabel);
+      const styleSeg = document.createElement('div');
+      Object.assign(styleSeg.style, {
+        display: 'flex', flex: '1', gap: '4px', borderRadius: '10px',
+        border: '1px solid #e3e7ee', padding: '3px', background: '#f6f8fb'
+      });
+      const tw = floatPanelSeg('台湾', traditionalStyle === 'tw');
+      tw.addEventListener('click', (e) => { e.stopPropagation(); setTraditionalStyle('tw'); });
+      const hk = floatPanelSeg('香港', traditionalStyle === 'hk');
+      hk.addEventListener('click', (e) => { e.stopPropagation(); setTraditionalStyle('hk'); });
+      styleSeg.appendChild(tw);
+      styleSeg.appendChild(hk);
+      styleRow.appendChild(styleSeg);
+      floatPanel.appendChild(styleRow);
+    }
     const toggleLabel = state === 'off'
       ? '▶ 开启转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
       : '⏸ 关闭转换';
@@ -1050,14 +1098,15 @@
   /* ============================================================
    * 8.4 重置所有设置
    * ============================================================
-   * 清除全部持久化偏好（方向、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
+   * 清除全部持久化偏好（方向、繁体字形、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
    * 沿用仓库约定（白名单变更亦 reload）以保证 DOM 与状态干净重启。
    * ============================================================ */
   function resetAllSettings() {
-    if (!window.confirm('确定重置所有设置？\n将清除方向、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
+    if (!window.confirm('确定重置所有设置？\n将清除方向、繁体字形、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
     try {
       if (typeof GM_setValue === 'function') {
         GM_setValue(STATE_KEY, 't2s');
+        GM_setValue(TRAD_STYLE_KEY, 'tw');
         GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(WHITELIST_KEY, []);
@@ -1073,7 +1122,7 @@
    * ============================================================ */
   function start() {
     if (state !== 'off' && !isWhitelisted && hasOpenCC) {   // 白名单/无 opencc 时不启动转换
-      convert = converters[state];
+      convert = converterForState(state);
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）

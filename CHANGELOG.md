@@ -4,6 +4,13 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- **简→繁可切换台湾／香港字形**：浮动面板在简→繁模式下提供两档选择，默认台湾字形；选择保存到 `zh-t2s-traditional-style`，刷新后保留，并通过 `BroadcastChannel` 同步同源标签页。香港模式使用 OpenCC `cn → hk`，台湾模式保持 `cn → tw`；两者只转换字形，不转换地区用词。
+- 切换字形时先还原当前页面原文，再用新字形重扫并重置转换统计；繁→简、关闭及白名单状态不受影响。重置所有设置会恢复台湾字形。
+
 ## [2.8.2] - 2026-11-11
 
 ### 修复
