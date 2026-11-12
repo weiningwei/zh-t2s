@@ -238,8 +238,12 @@
   // 规则行分隔符：Tab（表格粘贴）、半角 =>、全角 ＝＞、半角 ->、箭头 →
   const DICTIONARY_SEPARATORS = ['\t', '=>', '＝＞', '＝>', '->', '→'];
 
-  /** 按最靠前的分隔符切分规则行；找不到分隔符返回 null */
+  /** 优先识别标准 =>，保证编辑器格式化后的规则可往返；其余分隔符取最靠前者。 */
   function splitDictionaryLine(line) {
+    // validateDictionary 禁止词内含 =>，因此它存在时只能作为标准分隔符。
+    // 原词中的其他箭头保留为字面内容，避免 JSON 导入后无法保存或导出。
+    const canonicalPos = line.indexOf('=>');
+    if (canonicalPos >= 0) return [line.slice(0, canonicalPos), line.slice(canonicalPos + 2)];
     let pos = -1;
     let sepLength = 0;
     for (const separator of DICTIONARY_SEPARATORS) {
