@@ -396,7 +396,9 @@
     ? sitePreference : lastDirection;
 
   /** 当前页实际生效状态；全局修改不会覆盖站点明确选择的方向。 */
+  let pagePaused = false;
   function effectiveState() {
+    if (pagePaused) return 'off';
     if (!hasOpenCC) return 'off';
     return sitePreference === 'follow' ? state : sitePreference;
   }
@@ -441,7 +443,16 @@
   }
 
   /** 快捷键和按钮右键沿用当前设置范围，站点覆盖不会改动全局默认。 */
+
+  function setPagePaused(paused) {
+    const oldState = effectiveState();
+    pagePaused = !!paused;
+    applyState(oldState, effectiveState());
+    refreshMenu();
+  }
+
   function setPageState(direction) {
+    if (pagePaused) setPagePaused(false);
     if (sitePreference === 'follow') setState(direction);
     else setSitePreference(direction);
   }
@@ -981,6 +992,7 @@
 
   function floatBtnStateText() {
     if (!hasOpenCC) return { icon: '⚪', label: '未加载', on: false };
+    if (pagePaused) return { icon: '⚪', label: '本页已暂停', on: false };
     if (effectiveState() === 'off') return { icon: '⚪', label: sitePreference === 'off' ? '此站不转换' : '已关闭', on: false };
     return effectiveState() === 't2s'
       ? { icon: '🟢', label: '繁→简', on: true }
@@ -1801,6 +1813,7 @@
     const site = document.createElement('div');
     site.className = 'zh-t2s-site-card';
     renderSitePreferenceControl(site);
+    site.appendChild(floatPanelRow(pagePaused ? '恢复本页转换' : '本页临时暂停 · 查看原文', () => setPagePaused(!pagePaused), { control: 'pause' }));
     floatPanel.appendChild(site);
     if (effectiveState() === 's2t') {
       const style = document.createElement('div');
