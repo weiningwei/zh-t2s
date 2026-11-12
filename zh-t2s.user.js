@@ -518,6 +518,64 @@
     attrOriginal = new WeakMap();
   }
 
+
+  const IGNORE_RULES_KEY = 'zh-t2s-ignore-rules';
+  function validateIgnoreRules(data) {
+    if (!Array.isArray(data) || data.length > 20) throw new Error('最多20条忽略规则。');
+    if (data.some(rule => typeof rule !== 'string' || rule.length > 80 || !/^(?:[a-zA-Z][a-zA-Z0-9-]*|[.#][a-zA-Z_][a-zA-Z0-9_-]*)$/.test(rule))) throw new Error('每行仅支持标签、.class 或 #id，最长80字符。');
+    return [...new Set(data)];
+  }
+  function validateIgnoreSites(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).length > 1000) throw new Error('忽略规则格式无效。');
+    const result = Object.create(null);
+    for (const [host, rules] of Object.entries(data)) {
+      if (!host || host.length > 253 || !/^[a-z0-9._:\[\]-]+$/i.test(host)) throw new Error('忽略规则域名无效。');
+      result[host] = validateIgnoreRules(rules);
+    }
+    return result;
+  }
+  let ignoreRules = [];
+  let ignoreTags = new Set(), ignoreClasses = new Set(), ignoreIds = new Set();
+  function installIgnoreRules(rules) {
+    ignoreRules = rules;
+    ignoreTags = new Set(rules.filter(s => !/^[.#]/.test(s)).map(s => s.toUpperCase()));
+    ignoreClasses = new Set(rules.filter(s => s[0] === '.').map(s => s.slice(1)));
+    ignoreIds = new Set(rules.filter(s => s[0] === '#').map(s => s.slice(1)));
+  }
+  function readIgnoreRules() { return validateIgnoreRules(GM_getValue(IGNORE_RULES_KEY, {})[location.hostname] || []); }
+  try { if (typeof GM_getValue === 'function') installIgnoreRules(readIgnoreRules()); } catch (e) { console.warn('[zh-t2s] 忽略规则读取失败。', e); }
+  function observerOptions() {
+    if (!ignoreRules.length) return OBSERVER_OPTIONS;
+    return { ...OBSERVER_OPTIONS, attributeOldValue: true, attributeFilter: [...CONVERTIBLE_ATTRS,
+      ...(ignoreClasses.size ? ['class'] : []), ...(ignoreIds.size ? ['id'] : [])] };
+  }
+  function saveIgnoreRules(rules) {
+    const next = validateIgnoreRules(rules);
+    const all = validateIgnoreSites(GM_getValue(IGNORE_RULES_KEY, {}));
+    all[location.hostname] = next;
+    GM_setValue(IGNORE_RULES_KEY, all);
+    installIgnoreRules(next);
+    if (effectiveState() !== 'off') applyState(effectiveState(), effectiveState(), true);
+    refreshMenu();
+  }
+  function openIgnoreRules() {
+    const { root, close, setStatus } = openToolDialog('此网站忽略区域', `
+      <p>每行一个标签、.class 或 #id。例如 code、pre、.quote。仅此网站生效，最多20条。不支持组合选择器。</p>
+      <textarea data-rules aria-label="忽略规则"></textarea>
+      <div class="actions"><button data-save>保存并应用</button><button data-close>取消</button></div>`);
+    const field = root.querySelector('[data-rules]');
+    let original;
+    try { original = readIgnoreRules(); field.value = original.join('\n'); }
+    catch (e) { setStatus(e.message, true); return; }
+    root.querySelector('[data-close]').addEventListener('click', close);
+    root.querySelector('[data-save]').addEventListener('click', () => {
+      try {
+        if (JSON.stringify(readIgnoreRules()) !== JSON.stringify(original) && !window.confirm('忽略规则已在其他页面更新，覆盖吗？')) return;
+        saveIgnoreRules(field.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)); close();
+      } catch (e) { setStatus('保存失败：' + e.message, true); }
+    });
+  }
+
   /** 实时检查忽略区域，兼容类名变更与节点移动。 */
   function hasIgnoreAncestor(el) {
     return !!el.closest('.ignore-opencc');
@@ -527,6 +585,8 @@
   function shouldSkipElement(el) {
     for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
       if (SKIP_TAGS.has(ancestor.nodeName)) return true;
+      if (ignoreRules.length && (ignoreTags.has(ancestor.nodeName) || ignoreIds.has(ancestor.getAttribute('id')) ||
+          (ignoreClasses.size && (ancestor.getAttribute('class') || '').split(/\s+/).some(name => ignoreClasses.has(name))))) return true;
     }
     return hasIgnoreAncestor(el);
   }
@@ -568,6 +628,7 @@
    *  预检前置：只收集含汉字或可能命中自定义词典的文本节点。 */
   const TEXT_FILTER = Object.freeze({
     acceptNode(node) {
+      if (ignoreRules.length && textOriginal.has(node) && shouldSkipElement(node.parentElement)) return NodeFilter.FILTER_ACCEPT;
       if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
       if (!mayConvertText(node.nodeValue)) return NodeFilter.FILTER_REJECT;
       if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
@@ -635,7 +696,7 @@
     const t = root.nodeType;
     if (t === Node.TEXT_NODE) { queue.add(root); return; }
     if (t !== Node.ELEMENT_NODE && t !== Node.DOCUMENT_FRAGMENT_NODE && t !== Node.DOCUMENT_NODE) return;
-    if (t === Node.ELEMENT_NODE && SKIP_TAGS.has(root.nodeName)) return; // 整棵子树跳过
+    if (!ignoreRules.length && t === Node.ELEMENT_NODE && SKIP_TAGS.has(root.nodeName)) return; // 整棵子树跳过
 
     // 1) Text 节点：TreeWalker 仅遍历文本，由过滤器检查完整祖先边界
     //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText
@@ -691,9 +752,11 @@
 
       if (node.nodeType === Node.TEXT_NODE) {
         // 入队后焦点、类名或父节点可能改变，写入前必须重新检查。
-        if (!shouldSkipText(node)) convertTextNode(node);
+        if (ignoreRules.length && node.parentElement && shouldSkipElement(node.parentElement)) restoreTextNode(node);
+        else if (!shouldSkipText(node)) convertTextNode(node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        if (!SKIP_TAGS.has(node.nodeName)) convertAttributes(node);
+        if (ignoreRules.length && shouldSkipElement(node)) restoreAttributes(node);
+        else if (!SKIP_TAGS.has(node.nodeName)) convertAttributes(node);
       }
       processed++;
     }
@@ -750,6 +813,13 @@
           queue.add(m.target);
         }
       } else if (m.type === 'attributes') {
+        if (m.attributeName === 'class' || m.attributeName === 'id') {
+          const values = m.attributeName === 'class' ? ignoreClasses : ignoreIds;
+          const matches = value => m.attributeName === 'class'
+            ? (value || '').split(/\s+/).some(name => values.has(name)) : values.has(value);
+          if (matches(m.oldValue) !== matches(m.target.getAttribute(m.attributeName))) enqueueSubtree(m.target);
+          continue;
+        }
         if (m.target && m.target.nodeType === Node.ELEMENT_NODE) {
           const map = attrState.get(m.target);
           if (map && map.get(m.attributeName) === m.target.getAttribute(m.attributeName)) continue; // 自写回的值
@@ -763,7 +833,7 @@
           } else if (n.nodeType === Node.TEXT_NODE) {
             // 新增的裸文本节点需经过 shouldSkipText 过滤
             // （例如动态插入到 <script> 内的文本，enqueueSubtree 不会处理它）
-            if (!shouldSkipText(n)) queue.add(n);
+            if (!shouldSkipText(n) || (ignoreRules.length && textOriginal.has(n))) queue.add(n);
           }
         });
       }
@@ -848,13 +918,13 @@
       clearAllState();
       stats = { chars: 0, time: 0 };                    // 统计清零（还原+重转会让数字失真）
       convert = converterForState(newState);
-      observer.observe(document.documentElement, OBSERVER_OPTIONS);
+      observer.observe(document.documentElement, observerOptions());
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     } else if (!wasActive && isActive && hasOpenCC) {
       // 从关闭到开启（同方向）
       convert = converterForState(newState);
-      observer.observe(document.documentElement, OBSERVER_OPTIONS);
+      observer.observe(document.documentElement, observerOptions());
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     }
@@ -1448,7 +1518,7 @@
     }
     return { format: 'zh-t2s-settings', schemaVersion: 1, settings: {
       state: settings.state, lastDirection: settings.lastDirection, traditionalStyle: settings.traditionalStyle,
-      shortcuts, sitePreferences: sites, dictionary: validateDictionary(settings.dictionary), siteDictionaries: validateSiteDictionaries(settings.siteDictionaries || {}),
+      shortcuts, sitePreferences: sites, dictionary: validateDictionary(settings.dictionary), siteDictionaries: validateSiteDictionaries(settings.siteDictionaries || {}), ignoreSites: validateIgnoreSites(settings.ignoreSites || {}),
       floatButton: { enabled: button.enabled, position: button.position === null ? null : {
         left: button.position.left, top: button.position.top
       } }
@@ -1466,7 +1536,7 @@
         t2s: GM_getValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false }),
         s2t: GM_getValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false })
       },
-      siteDictionaries: GM_getValue(SITE_DICTIONARY_KEY, {}), sitePreferences: readSitePreferences(), dictionary: GM_getValue(DICTIONARY_KEY, { t2s: [], s2t: [] }),
+      ignoreSites: GM_getValue(IGNORE_RULES_KEY, {}), siteDictionaries: GM_getValue(SITE_DICTIONARY_KEY, {}), sitePreferences: readSitePreferences(), dictionary: GM_getValue(DICTIONARY_KEY, { t2s: [], s2t: [] }),
       floatButton: { enabled: GM_getValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT), position: GM_getValue(FLOAT_BTN_POS, null) }
     } });
   }
@@ -1483,6 +1553,7 @@
       [SITE_PREFERENCES_KEY, settings.sitePreferences, {}], [WHITELIST_KEY, [], []],
       [DICTIONARY_KEY, settings.dictionary, { t2s: [], s2t: [] }],
       [SITE_DICTIONARY_KEY, settings.siteDictionaries, {}],
+      [IGNORE_RULES_KEY, settings.ignoreSites, {}],
       [FLOAT_BTN_KEY, settings.floatButton.enabled, FLOAT_BTN_DEFAULT], [FLOAT_BTN_POS, settings.floatButton.position, null]
     ];
     const previous = entries.map(([key, , fallback]) => GM_getValue(key, fallback));
@@ -1879,6 +1950,7 @@
     renderGlobalPreferenceControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
+    floatPanel.appendChild(floatPanelRow('此网站忽略区域', openIgnoreRules, { control: 'ignore' }));
     floatPanel.appendChild(floatPanelRow('此网站词典 · ' + (siteDictionary.t2s.length + siteDictionary.s2t.length) + ' 条', () => openDictionaryEditor('site'), { control: 'site-dictionary' }));
     floatPanel.appendChild(floatPanelRow('选中文字转换', openSelectionTool, { control: 'selection' }));
     const footer = document.createElement('div');
@@ -1960,6 +2032,7 @@
         GM_setValue(STATE_KEY, 't2s');
         GM_setValue(DICTIONARY_KEY, { t2s: [], s2t: [] });
         GM_setValue(SITE_DICTIONARY_KEY, {});
+        GM_setValue(IGNORE_RULES_KEY, {});
         GM_setValue(TRAD_STYLE_KEY, 'tw');
         GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
@@ -1979,7 +2052,7 @@
     if (effectiveState() !== 'off') {
       convert = converterForState(effectiveState());
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
-      observer.observe(document.documentElement, OBSERVER_OPTIONS);
+      observer.observe(document.documentElement, observerOptions());
       // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）
       enqueueSubtree(document.documentElement);
       scheduleIdle();
