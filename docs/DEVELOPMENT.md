@@ -4,9 +4,20 @@
 
 ## 源码与验证
 
-`zh-t2s.user.js` 是唯一源码，使用 IIFE，无构建步骤、包管理或自动化测试基础设施。直接修改后保存，在 Tampermonkey 中安装／重装，使用中文网页手动验证。
+`zh-t2s.user.js` 是唯一用户脚本源码，使用 IIFE，无构建步骤或包管理。直接修改后保存，在 Tampermonkey 中安装／重装，使用中文网页手动验证。
 
-按改动范围检查方向切换与原文还原、台湾／香港字形、动态内容、白名单，以及词典的编辑／预览／导入导出。涉及存储时，还应检查跨页面同步、保存冲突与保存失败后的状态。语法可通过 `node --check zh-t2s.user.js` 检查。
+GitHub Actions 在 push、PR 和手动触发时运行轻量 CI：检查 JavaScript 语法、必要元数据，以及脚本 `@version`、README 版本徽章和 CHANGELOG 最新发布版本的一致性。允许保留 `Unreleased` 开发记录，不要求每次修改都升级版本。CI 不执行用户脚本，不请求 OpenCC CDN，也不验证浏览器交互。
+
+本地安装 Node.js 24 后可执行同样的检查，无需安装依赖：
+
+```sh
+node --check zh-t2s.user.js
+node .github/scripts/check-userscript.cjs
+```
+
+元数据检查会保护当前全站匹配、`@noframes`、`document-idle`、四项 GM 授权和固定版本的 jsDelivr OpenCC 依赖。若有意修改这些约定，请同步调整 `.github/scripts/check-userscript.cjs`。
+
+按改动范围检查方向切换与原文还原、台湾／香港字形、动态内容、白名单，以及词典的编辑／预览／导入导出。涉及存储时，还应检查跨页面同步、保存冲突与保存失败后的状态。
 
 ## 转换流程
 
