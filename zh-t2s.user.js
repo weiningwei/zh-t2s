@@ -49,7 +49,7 @@
   }
   // 字典在 opencc-js 模块级共享，converter 实例仅配置对象，内存增量可忽略；
   // 但简→繁的地区字形 converter 构建开销较大（每个约 75ms），且关闭状态、
-  // 白名单站点与只用繁→简的用户根本用不到，故改为首次使用时惰性构建并缓存
+  // 停用的站点与只用繁→简的用户根本用不到，故改为首次使用时惰性构建并缓存
   const converters = hasOpenCC ? {
     t2s: OpenCC.Converter({ from: 't', to: 'cn' }),
     s2t: {}
@@ -88,7 +88,7 @@
   function safeConvert(text) {
     if (!convert) return text;
     try {
-      const root = dictionaryTries[state];
+      const root = dictionaryTries[effectiveState()];
       if (!root || root.size === 0) return convert(text);
       return applyDictionary(text, convert, root);
     }
@@ -274,7 +274,7 @@
     dictionary = next;
     dictionaryTries = tries;
     dictionaryNonHanStart = nonHanStart;
-    if (effectiveState() !== 'off') applyState(state, state, true);
+    if (effectiveState() !== 'off') applyState(effectiveState(), effectiveState(), true);
     refreshMenu();
   }
 
@@ -295,7 +295,7 @@
     if (!next || JSON.stringify(next) === JSON.stringify(dictionary)) return;
     dictionary = next;
     dictionaryTries = compileDictionary(next);
-    if (effectiveState() !== 'off') applyState(state, state, true);
+    if (effectiveState() !== 'off') applyState(effectiveState(), effectiveState(), true);
     refreshMenu();
   }
 
@@ -363,31 +363,85 @@
   }
 
   /* ============================================================
-   * 2.3 白名单（不转换名单，按域名匹配）
-   * ============================================================
-   * 名单中的域名不做任何转换，用于排除特定站点。
-   * 数据存 GM_setValue（字符串数组），浮动面板可加入/移出/清空。
+   * 2.3 站点偏好：按 hostname 覆盖全局方向；旧白名单兼容为 off
    * ============================================================ */
-  const WHITELIST_KEY = 'zh-t2s-whitelist';
-  let whitelist = []; // 域名数组，如 ['ptt.cc', 'youtube.com']
-  try {
-    if (typeof GM_getValue === 'function') {
-      const saved = GM_getValue(WHITELIST_KEY, []);
-      if (Array.isArray(saved)) whitelist = saved;
-    }
-  } catch (e) {}
-
+  const WHITELIST_KEY = 'zh-t2s-whitelist'; // 仅用于兼容与重置旧数据
+  const SITE_PREFERENCES_KEY = 'zh-t2s-site-preferences';
   const currentHost = location.hostname;
-  let isWhitelisted = whitelist.includes(currentHost); // let：移出白名单后会重新计算
+  const SITE_MODES = ['follow', 't2s', 's2t', 'off'];
+  let sitePreference = 'follow';
+  let sitePreferenceError = '';
 
-  function saveWhitelist() {
-    try { if (typeof GM_setValue === 'function') GM_setValue(WHITELIST_KEY, whitelist); } catch (e) {}
+  function readSitePreferences() {
+    const result = Object.create(null);
+    if (typeof GM_getValue !== 'function') return result;
+    const legacy = GM_getValue(WHITELIST_KEY, []);
+    if (Array.isArray(legacy)) {
+      for (const host of legacy) if (typeof host === 'string') result[host] = 'off';
+    }
+    const saved = GM_getValue(SITE_PREFERENCES_KEY, {});
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      for (const [host, mode] of Object.entries(saved)) {
+        if (SITE_MODES.includes(mode)) result[host] = mode;
+      }
+    }
+    return result;
   }
 
-  /** 当前页实际生效状态（综合白名单、opencc-js 可用性） */
+  try { sitePreference = readSitePreferences()[currentHost] || 'follow'; }
+  catch (e) { console.warn('[zh-t2s] 站点偏好读取失败。', e); }
+  let lastPageDirection = sitePreference === 's2t' || sitePreference === 't2s'
+    ? sitePreference : lastDirection;
+
+  /** 当前页实际生效状态；全局修改不会覆盖站点明确选择的方向。 */
   function effectiveState() {
-    if (isWhitelisted || !hasOpenCC) return 'off';
-    return state;
+    if (!hasOpenCC) return 'off';
+    return sitePreference === 'follow' ? state : sitePreference;
+  }
+
+  function setSitePreference(mode) {
+    if (!SITE_MODES.includes(mode)) return false;
+    try {
+      if (typeof GM_setValue !== 'function') throw new Error('当前环境不支持保存设置。');
+      // 保存前读取，保留其他网站新设置的偏好；显式 follow 覆盖旧白名单。
+      const next = readSitePreferences();
+      next[currentHost] = mode;
+      GM_setValue(SITE_PREFERENCES_KEY, next);
+    } catch (e) {
+      sitePreferenceError = '保存失败：' + e.message;
+      refreshMenu();
+      return false;
+    }
+    const oldState = effectiveState();
+    if (oldState !== 'off') lastPageDirection = oldState;
+    sitePreference = mode;
+    if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+    sitePreferenceError = '';
+    applyState(oldState, effectiveState());
+    refreshMenu();
+    if (channel) {
+      try { channel.postMessage({ type: 'zh-t2s-site-preference' }); } catch (e) {}
+    }
+    return true;
+  }
+
+  function syncSitePreferenceFromStorage() {
+    try {
+      const next = readSitePreferences()[currentHost] || 'follow';
+      if (next === sitePreference) return;
+      const oldState = effectiveState();
+      sitePreference = next;
+      if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+      sitePreferenceError = '';
+      applyState(oldState, effectiveState());
+      refreshMenu();
+    } catch (e) { console.warn('[zh-t2s] 站点偏好同步失败。', e); }
+  }
+
+  /** 快捷键和按钮右键沿用当前设置范围，站点覆盖不会改动全局默认。 */
+  function setPageState(direction) {
+    if (sitePreference === 'follow') setState(direction);
+    else setSitePreference(direction);
   }
 
   /* ============================================================
@@ -452,10 +506,10 @@
 
   function mayConvertText(text) {
     if (HAS_CJK.test(text)) return true;
-    const root = dictionaryTries[state];
+    const root = dictionaryTries[effectiveState()];
     if (!root || root.size === 0) return false;
     // 规则首字符全是汉字时，无汉字文本不可能命中，免去逐字符扫描
-    if (!dictionaryNonHanStart[state]) return false;
+    if (!dictionaryNonHanStart[effectiveState()]) return false;
     for (let i = 0; i < text.length; i++) if (root.has(text[i])) return true;
     return false;
   }
@@ -618,7 +672,7 @@
   let rescanTimer = null;
   const RESCAN_DELAY = 160; // 等框架完成 DOM 更新后再扫，避免扫描到更新前的临时状态
   function rescanDocument() {
-    if (effectiveState() === 'off') return; // 关闭/白名单/无 opencc 时不扫
+    if (effectiveState() === 'off') return; // 关闭/站点停用/无 opencc 时不扫
     enqueueSubtree(document.documentElement);
     scheduleIdle();
   }
@@ -723,7 +777,7 @@
 
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
   function applyState(oldState, newState, conversionChanged = false) {
-    if (isWhitelisted || !hasOpenCC) return;
+    if (!hasOpenCC || (oldState === 'off' && newState === 'off')) return;
     const wasActive = oldState !== 'off';
     const isActive = newState !== 'off';
     const directionChanged = wasActive && isActive && oldState !== newState;
@@ -758,9 +812,10 @@
   }
 
   function setState(newState) {
-    if (state === newState) return; // 防止 BroadcastChannel 回环
-    const oldState = state;
+    if (!['off', 't2s', 's2t'].includes(newState) || state === newState) return;
+    const oldState = effectiveState();
     state = newState;
+    if (effectiveState() !== 'off') lastPageDirection = effectiveState();
     if (newState !== 'off') lastDirection = newState; // 记住最后使用的方向，供再次开启沿用
     try {
       if (typeof GM_setValue === 'function') {
@@ -768,7 +823,7 @@
         if (newState !== 'off') GM_setValue(LAST_DIR_KEY, newState);
       }
     } catch (e) {}
-    applyState(oldState, newState);
+    applyState(oldState, effectiveState());
     refreshMenu();
     if (channel) {
       try { channel.postMessage({ type: 'zh-t2s-state', state: newState }); } catch (e) {}
@@ -779,8 +834,8 @@
     if ((newStyle !== 'tw' && newStyle !== 'hk') || traditionalStyle === newStyle) return;
     traditionalStyle = newStyle;
     try { if (typeof GM_setValue === 'function') GM_setValue(TRAD_STYLE_KEY, newStyle); } catch (e) {}
-    if (state === 's2t' && !isWhitelisted && hasOpenCC) {
-      applyState(state, state, true);
+    if (effectiveState() === 's2t') {
+      applyState(effectiveState(), effectiveState(), true);
     }
     refreshMenu();
     if (channel) {
@@ -793,6 +848,8 @@
     channel.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'zh-t2s-state' && e.data.state !== state) {
         setState(e.data.state); // setState 开头会判等防回环
+      } else if (e.data && e.data.type === 'zh-t2s-site-preference') {
+        syncSitePreferenceFromStorage();
       } else if (e.data && e.data.type === 'zh-t2s-traditional-style') {
         setTraditionalStyle(e.data.style);
       }
@@ -802,7 +859,10 @@
   // 词典不走广播：BroadcastChannel 仅同源，而词典全站生效；
   // 其他页面保存后，本标签在切回前台时读取存储按需同步，只重扫真正用到的标签。
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') syncDictionaryFromStorage();
+    if (document.visibilityState === 'visible') {
+      syncSitePreferenceFromStorage();
+      syncDictionaryFromStorage();
+    }
   });
 
   /* ============================================================
@@ -816,72 +876,18 @@
 
   function menuCaptionT2S() {
     const sc = formatShortcut(shortcutT2S);
-    return effectiveState() === 't2s' ? `✅ 繁→简 [${sc}]` : `⏸ 繁→简 [${sc}]`;
+    return state === 't2s' ? `✅ 全局繁→简 [${sc}]` : `⏸ 全局繁→简 [${sc}]`;
   }
   function menuCaptionS2T() {
     const sc = formatShortcut(shortcutS2T);
     const style = traditionalStyle === 'hk' ? '香港' : '台湾';
-    return effectiveState() === 's2t' ? `✅ 简→繁·${style} [${sc}]` : `⏸ 简→繁·${style} [${sc}]`;
+    return state === 's2t' ? `✅ 全局简→繁·${style} [${sc}]` : `⏸ 全局简→繁·${style} [${sc}]`;
   }
   function menuCaptionStats() {
     // 耗时显示：小于 10ms 显示 1 位小数，否则取整
     const t = stats.time < 10 ? stats.time.toFixed(1) : Math.round(stats.time);
     return `📊 ${stats.chars}字 / ${t}ms`;
   }
-  function menuCaptionToggleWhitelist() {
-    return isWhitelisted
-      ? `➖ 移出白名单（${currentHost}）`
-      : `➕ 加入白名单（${currentHost}）`;
-  }
-  function menuCaptionClearWhitelist() {
-    return `🗑 清空白名单（共 ${whitelist.length} 项）`;
-  }
-
-  /** 加入/移出白名单（当前域名），就地生效无需刷新 */
-  function toggleWhitelist() {
-    if (isWhitelisted) {
-      whitelist = whitelist.filter((h) => h !== currentHost);
-    } else {
-      whitelist.push(currentHost);
-    }
-    isWhitelisted = !isWhitelisted;
-    saveWhitelist();
-    applyWhitelistChange();
-  }
-
-  /** 清空白名单，就地生效无需刷新 */
-  function clearWhitelist() {
-    if (whitelist.length === 0) return;
-    if (!confirm('确定清空白名单（共 ' + whitelist.length + ' 项）？')) return;
-    whitelist = [];
-    isWhitelisted = false;
-    saveWhitelist();
-    applyWhitelistChange();
-  }
-
-  /** 白名单改变后的就地应用：恢复/启停 observer，不刷新页面 */
-  function applyWhitelistChange() {
-    if (isWhitelisted) {
-      if (state !== 'off' && hasOpenCC) {
-        observer.disconnect();
-        queue.clear();
-        scheduled = false;
-        restoreAll();
-        clearAllState();
-      }
-    } else {
-      if (state !== 'off' && hasOpenCC) {
-        convert = converterForState(state);
-        observer.observe(document.documentElement, OBSERVER_OPTIONS);
-        enqueueSubtree(document.documentElement);
-        scheduleIdle();
-      }
-    }
-    updateFloatBtn();
-    refreshMenu();
-    if (floatPanelOpen) renderFloatPanelContent();
-  }
-
   function refreshMenu() {
     if (typeof GM_registerMenuCommand !== 'function') {
       console.warn('[zh-t2s] GM_registerMenuCommand 不可用，菜单禁用');
@@ -940,14 +946,13 @@
     );
 
     if (inForm) return;
-    if (isWhitelisted) return;
 
     if (matchShortcut(e, shortcutT2S)) {
       e.preventDefault();
-      setState(state === 't2s' ? 'off' : 't2s');
+      setPageState(effectiveState() === 't2s' ? 'off' : 't2s');
     } else if (matchShortcut(e, shortcutS2T)) {
       e.preventDefault();
-      setState(state === 's2t' ? 'off' : 's2t');
+      setPageState(effectiveState() === 's2t' ? 'off' : 's2t');
     }
   }, true);
 
@@ -959,7 +964,7 @@
   /* ============================================================
    * 8.3 浮动状态按钮（页面内可见开关，支持在菜单关闭）
    * ============================================================
-   * 默认显示于右下角，展示当前转换状态（🟢繁→简 / 🟢简→繁 / ⚪关 / ⚪忽略 / ⚪未加载）。
+   * 默认显示于右下角，展示当前页实际方向、关闭、此站不转换或引擎未加载。
    * 点击胶囊展开面板：可切换方向、关闭、或隐藏本按钮。
    * 按钮自身带 .ignore-opencc（文本/属性均不被转换），且用内联样式隔离页面 CSS。
    * 仅顶层框架创建（与菜单一致）。
@@ -974,9 +979,8 @@
 
   function floatBtnStateText() {
     if (!hasOpenCC) return { icon: '⚪', label: '未加载', on: false };
-    if (isWhitelisted) return { icon: '⚪', label: '已忽略', on: false };
-    if (state === 'off') return { icon: '⚪', label: '已关闭', on: false };
-    return state === 't2s'
+    if (effectiveState() === 'off') return { icon: '⚪', label: sitePreference === 'off' ? '此站不转换' : '已关闭', on: false };
+    return effectiveState() === 't2s'
       ? { icon: '🟢', label: '繁→简', on: true }
       : { icon: '🟢', label: '简→繁·' + (traditionalStyle === 'hk' ? '港' : '台'), on: true };
   }
@@ -1058,10 +1062,10 @@
     floatBtn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (state === 'off') {
-        setState(lastDirection);
+      if (effectiveState() === 'off') {
+        setPageState(lastPageDirection);
       } else {
-        setState(state === 't2s' ? 's2t' : 't2s');
+        setPageState(effectiveState() === 't2s' ? 's2t' : 't2s');
       }
     });
     floatBtn.addEventListener('pointerdown', onFloatPointerDown);
@@ -1073,7 +1077,7 @@
     if (!floatBtn) return;
     const s = floatBtnStateText();
     floatBtnLabel.textContent = s.label;
-    floatBtnBadge.textContent = s.on ? (state === 's2t' ? '简' : '繁') : '·';
+    floatBtnBadge.textContent = s.on ? (effectiveState() === 's2t' ? '简' : '繁') : '·';
     floatBtn.classList.toggle('off', !s.on);
   }
 
@@ -1405,12 +1409,45 @@
     dialog.showModal();
   }
 
+  function renderSitePreferenceControl(panel) {
+    const label = document.createElement('label');
+    label.textContent = '此网站（' + currentHost + '）';
+    Object.assign(label.style, { display: 'block', padding: '4px', overflowWrap: 'anywhere' });
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', '此网站的转换偏好');
+    Object.assign(select.style, {
+      display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '6px',
+      padding: '7px', border: '1px solid #d4dce8', borderRadius: '8px',
+      background: '#fff', color: '#1f2329', font: 'inherit'
+    });
+    for (const [value, text] of [['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      select.appendChild(option);
+    }
+    select.value = sitePreference;
+    select.addEventListener('change', () => setSitePreference(select.value));
+    label.appendChild(select);
+    panel.appendChild(label);
+    const hint = document.createElement('div');
+    hint.textContent = sitePreferenceError || (sitePreference === 'follow'
+      ? '使用全局默认；选择后自动保存。' : '仅对此网站生效，已自动保存。');
+    Object.assign(hint.style, { padding: '4px', fontSize: '12px', color: sitePreferenceError ? '#b42318' : '#6b7280' });
+    hint.setAttribute('role', 'status');
+    panel.appendChild(hint);
+  }
+
   // 重绘扁平面板；词典编辑器独立维护草稿。
   function renderFloatPanelContent() {
     if (!floatPanel) return;
     floatPanel.innerHTML = '';
-    // 页眉 + 方向/字形 + 开关 + 白名单 + 词典 + 重置 + 隐藏
+    // 页眉 + 全局方向/字形/开关 + 此网站偏好 + 词典 + 重置 + 隐藏
     floatPanel.appendChild(floatPanelHeader());
+    const globalLabel = document.createElement('div');
+    globalLabel.textContent = '全局默认';
+    globalLabel.style.padding = '4px';
+    floatPanel.appendChild(globalLabel);
     const seg = document.createElement('div');
     Object.assign(seg.style, {
       display: 'flex', gap: '4px', borderRadius: '10px',
@@ -1423,7 +1460,7 @@
     seg.appendChild(s1);
     seg.appendChild(s2);
     floatPanel.appendChild(seg);
-    if (state === 's2t') {
+    if (effectiveState() === 's2t') {
       const styleRow = document.createElement('div');
       Object.assign(styleRow.style, { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' });
       const styleLabel = document.createElement('span');
@@ -1445,19 +1482,14 @@
       floatPanel.appendChild(styleRow);
     }
     const toggleLabel = state === 'off'
-      ? '▶ 开启转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
-      : '⏸ 关闭转换';
+      ? '▶ 开启全局转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
+      : '⏸ 关闭全局转换';
     floatPanel.appendChild(floatPanelRow(toggleLabel, () => {
       if (state === 'off') setState(lastDirection);
       else setState('off');
     }));
     floatPanel.appendChild(floatPanelDivider());
-    floatPanel.appendChild(floatPanelRow(menuCaptionToggleWhitelist(), () => { toggleWhitelist(); }));
-    if (whitelist.length > 0) {
-      floatPanel.appendChild(floatPanelRow(menuCaptionClearWhitelist(), () => { clearWhitelist(); }));
-    } else {
-      floatPanel.appendChild(floatPanelRow('🗑 白名单为空', null, { muted: true }));
-    }
+    renderSitePreferenceControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('📖 自定义词典（' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条）', openDictionaryEditor));
     floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
@@ -1501,11 +1533,11 @@
   /* ============================================================
    * 8.4 重置所有设置
    * ============================================================
-   * 清除全部持久化偏好（词典、方向、繁体字形、快捷键、白名单、浮动按钮），恢复默认后刷新页面。
-   * 重置后刷新页面；白名单变更则使用 applyWhitelistChange 就地生效。
+   * 清除全部持久化偏好（词典、方向、繁体字形、快捷键、站点偏好、浮动按钮），恢复默认后刷新页面。
+   * 重置后刷新页面；站点偏好变更则就地生效。
    * ============================================================ */
   function resetAllSettings() {
-    if (!window.confirm('确定重置所有设置？\n将清除自定义词典、方向、繁体字形、快捷键、白名单与浮动按钮偏好，并恢复默认。')) return;
+    if (!window.confirm('确定重置所有设置？\n将清除自定义词典、方向、繁体字形、快捷键、站点偏好与浮动按钮偏好，并恢复默认。')) return;
     try {
       if (typeof GM_setValue === 'function') {
         GM_setValue(STATE_KEY, 't2s');
@@ -1514,6 +1546,7 @@
         GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(WHITELIST_KEY, []);
+        GM_setValue(SITE_PREFERENCES_KEY, {});
         GM_setValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT);
         GM_setValue(FLOAT_BTN_POS, null); // 顺便复位拖动位置，回到默认右下角
       }
@@ -1525,15 +1558,15 @@
    * 9. 启动
    * ============================================================ */
   function start() {
-    if (state !== 'off' && !isWhitelisted && hasOpenCC) {   // 白名单/无 opencc 时不启动转换
-      convert = converterForState(state);
+    if (effectiveState() !== 'off') {
+      convert = converterForState(effectiveState());
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
       observer.observe(document.documentElement, OBSERVER_OPTIONS);
       // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     }
-    registerMenu(); // 无论白名单/关闭/无 opencc 状态都注册菜单，供用户管理
+    registerMenu(); // 无论站点停用/关闭/无 opencc 状态都注册菜单，供用户管理
   }
 
   if (document.readyState === 'loading') {

@@ -24,7 +24,7 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 
 元数据检查会保护当前全站匹配、`@noframes`、`document-idle`、四项 GM 授权和固定版本的 jsDelivr OpenCC 依赖。若有意修改这些约定，请同步调整 `.github/scripts/check-userscript.cjs`。
 
-按改动范围检查方向切换与原文还原、台湾／香港字形、动态内容、白名单，以及词典的编辑／预览／导入导出。涉及存储时，还应检查跨页面同步、保存冲突与保存失败后的状态。
+按改动范围检查方向切换与原文还原、台湾／香港字形、动态内容、站点偏好及旧白名单兼容，以及词典的编辑／预览／导入导出。涉及存储时，还应检查跨页面同步、保存冲突与保存失败后的状态。
 
 ## 转换流程
 
@@ -34,7 +34,7 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 | 词典 | 按方向编译 Trie，原文同位置最长词优先；未命中的片段交给 OpenCC |
 | 初始扫描 | TreeWalker 收集文本，原生选择器收集可转换属性元素 |
 | 文本预检 | `mayConvertText` 跳过无汉字且不可能命中词典的文本；Unicode Han 检测覆盖扩展区 |
-| 忽略区域 | `SKIP_TAGS`、`.ignore-opencc` 和正在编辑的富文本；祖先查询由 WeakMap 缓存 |
+| 忽略区域 | `SKIP_TAGS`、`.ignore-opencc` 和正在编辑的富文本；祖先边界实时检查，空闲写入前再次确认 |
 | 分批调度 | requestIdleCallback（无此 API 时用 setTimeout），每批最多 300 个节点 |
 | 动态更新 | MutationObserver 监听子节点、文本和指定属性；点击后去抖重扫补漏 |
 | 防止回环 | WeakMap 记录最近写入值，Observer 忽略自身写入；处理时再次跳过已转换节点 |
@@ -49,8 +49,12 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 | 方向／开关 | `zh-t2s-enabled`、`zh-t2s-lastdir` | 同源 BroadcastChannel；其他站点刷新后读取 |
 | 繁体字形 | `zh-t2s-traditional-style` | 同源 BroadcastChannel；其他站点刷新后读取 |
 | 自定义词典 | `zh-t2s-dictionary` | 切回前台或打开编辑器时读存储，保存前检查冲突 |
-| 白名单 | `zh-t2s-whitelist` | 当前页立即生效，其他页面刷新后读取 |
+| 站点偏好 | `zh-t2s-site-preferences` | 当前页立即生效，同源广播通知读存储，切回前台时重新读取 |
 | 按钮显隐／位置 | `zh-t2s-floatbtn`、`zh-t2s-floatpos` | 当前页立即生效，其他页面刷新后读取 |
+
+站点偏好格式为 `{ "example.com": "follow" | "t2s" | "s2t" | "off" }`，按 hostname 精确匹配，优先于全局 `state`。转换器、词典预检与匹配、字形变更、扫描和面板状态均使用 `effectiveState()`。菜单和面板“全局默认”修改全局设置；快捷键和按钮右键通过 `setPageState()` 沿用当前范围。
+
+读取站点偏好时先将旧 `zh-t2s-whitelist` 合并为 `off`，再覆盖新设置，显式 `follow` 可解除旧排除项；首次保存会将合并后的配置持久化。保存前重读其他网站配置，写入成功后才切换当前页状态；重置同时清空新旧存储。测试覆盖站点方向与词典、开关还原、刷新持久化、精确域名、旧数据兼容、保存失败、同步及选择控件。
 
 词典格式为 `{ t2s: [[source, target]], s2t: [[source, target]] }`，与 JSON 导入导出一致。快捷键仍读取 `zh-t2s-shortcut-t2s/s2t` 兼容旧偏好，当前无配置入口。
 

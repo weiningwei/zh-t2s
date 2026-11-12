@@ -9,6 +9,149 @@ const data = (t2s = [], s2t = []) => ({ t2s, s2t });
 const editorSelector = direction => '[data-editor="' + direction + '"]';
 const actionSelector = action => '[data-action="' + action + '"]';
 
+test('site preferences override global defaults, match exact hosts and survive reload', () => {
+  for (const mode of ['follow', 't2s', 's2t', 'off']) {
+    const harness = loadUserscript({ state: 'off', sitePreferences: { 'example.test': mode } });
+    assert.equal(harness.api.effectiveState(), mode === 'follow' ? 'off' : mode);
+    harness.api.setState('t2s');
+    assert.equal(harness.api.effectiveState(), mode === 'follow' ? 't2s' : mode);
+    assert.equal(harness.api.setSitePreference('s2t'), true);
+    assert.equal(harness.storage.get('zh-t2s-enabled'), 't2s');
+    const saved = harness.storage.get('zh-t2s-site-preferences');
+    assert.equal(loadUserscript({ sitePreferences: saved }).api.effectiveState(), 's2t');
+    assert.equal(loadUserscript({ hostname: 'sub.example.test', sitePreferences: saved }).api.effectiveState(), 't2s');
+  }
+});
+
+test('bootstrap uses the site direction even when the global default is off', () => {
+  const { api, document, observations } = loadUserscript({ state: 'off',
+    sitePreferences: { 'example.test': 's2t' }, dictionary: data([['ASCII', '错误方向']], [['ASCII', '正確方向']]) });
+  const text = document.createTextNode('ASCII');
+  document.documentElement.appendChild(text);
+  api.start();
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '正確方向');
+  assert.equal(observations.length, 1);
+});
+
+test('site changes use the correct dictionary and restore original text and attributes', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['原文', '全局结果']], [['原文', '站點結果']]) });
+  const el = document.createElement('div');
+  const text = document.createTextNode('原文');
+  el.appendChild(text);
+  el.setAttribute('title', '原文');
+  document.documentElement.appendChild(el);
+  for (const [mode, expected] of [['s2t', '站點結果'], ['t2s', '全局结果'], ['off', '原文'], ['follow', '全局结果']]) {
+    api.setSitePreference(mode);
+    api.processQueue({ timeRemaining: () => 10 });
+    assert.equal(text.nodeValue, expected, mode);
+    assert.equal(el.getAttribute('title'), expected, mode);
+  }
+  api.setSitePreference('s2t');
+  api.saveDictionary(data([['原文', '全局结果']], [['原文', '新站點結果']]));
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '新站點結果');
+  const before = api.effectiveState();
+  api.setTraditionalStyle('hk');
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(api.effectiveState(), before);
+  assert.equal(text.nodeValue, '新站點結果');
+});
+
+test('site preference save preserves other sites and explicitly overrides legacy exclusions', () => {
+  const harness = loadUserscript({ whitelist: ['example.test', 'legacy.test'] });
+  harness.storage.set('zh-t2s-site-preferences', { 'other.test': 's2t' });
+  harness.api.setSitePreference('follow');
+  assert.deepEqual(plain(harness.storage.get('zh-t2s-site-preferences')), {
+    'example.test': 'follow', 'legacy.test': 'off', 'other.test': 's2t'
+  });
+  const reloaded = loadUserscript({ whitelist: ['example.test'],
+    sitePreferences: harness.storage.get('zh-t2s-site-preferences') });
+  assert.equal(reloaded.api.effectiveState(), 't2s');
+  assert.equal(harness.api.setSitePreference('invalid'), false);
+});
+
+test('failed site preference save leaves settings and DOM unchanged and allows retry', () => {
+  const harness = loadUserscript();
+  const before = harness.scans;
+  harness.failWrites(new Error('模拟存储失败'));
+  assert.equal(harness.api.setSitePreference('s2t'), false);
+  assert.equal(harness.api.preference(), 'follow');
+  assert.equal(harness.api.effectiveState(), 't2s');
+  assert.deepEqual(harness.storage.get('zh-t2s-site-preferences'), {});
+  assert.equal(harness.scans, before);
+  assert.equal(harness.observations.length, 0);
+  const panel = harness.document.createElement('div');
+  harness.api.renderSitePreferenceControl(panel);
+  assert.match(panel.children[1].textContent, /保存失败/);
+  harness.failWrites(null);
+  assert.equal(harness.api.setSitePreference('s2t'), true);
+  assert.equal(harness.api.effectiveState(), 's2t');
+});
+
+test('site preference broadcasts and visibility updates restore and reconvert without rebroadcast', async () => {
+  const harness = loadUserscript();
+  harness.api.setSitePreference('s2t');
+  assert.equal(harness.broadcasts.at(-1).type, 'zh-t2s-site-preference');
+  const count = harness.broadcasts.length;
+  harness.storage.set('zh-t2s-site-preferences', { 'example.test': 'off' });
+  harness.receiveBroadcast({ type: 'zh-t2s-site-preference' });
+  assert.equal(harness.api.effectiveState(), 'off');
+  harness.storage.set('zh-t2s-site-preferences', { 'example.test': 't2s' });
+  harness.document.visibilityState = 'visible';
+  await harness.document.fire('visibilitychange');
+  assert.equal(harness.api.effectiveState(), 't2s');
+  assert.equal(harness.broadcasts.length, count);
+  harness.receiveBroadcast({ type: 'zh-t2s-state', state: 's2t' });
+  assert.equal(harness.api.effectiveState(), 't2s');
+});
+
+test('site preference selector exposes four choices and saves immediately', async () => {
+  const { api, document, storage } = loadUserscript();
+  const panel = document.createElement('div');
+  api.renderSitePreferenceControl(panel);
+  const select = panel.children[0].children[0];
+  assert.deepEqual(select.children.map(option => option.value), ['follow', 't2s', 's2t', 'off']);
+  assert.equal(select.value, 'follow');
+  select.value = 'off';
+  await select.fire('change');
+  assert.equal(api.effectiveState(), 'off');
+  assert.equal(storage.get('zh-t2s-site-preferences')['example.test'], 'off');
+});
+
+test('page shortcuts modify the selected scope while global menus retain global defaults', () => {
+  const { api, storage } = loadUserscript();
+  api.setPageState('s2t');
+  assert.equal(storage.get('zh-t2s-enabled'), 's2t');
+  api.setSitePreference('t2s');
+  api.setPageState('off');
+  assert.equal(storage.get('zh-t2s-enabled'), 's2t');
+  assert.equal(storage.get('zh-t2s-site-preferences')['example.test'], 'off');
+  api.setState('off');
+  assert.equal(api.effectiveState(), 'off');
+  api.setSitePreference('s2t');
+  assert.equal(api.effectiveState(), 's2t');
+});
+
+test('missing OpenCC keeps conversion disabled while site preferences remain configurable', () => {
+  const harness = loadUserscript({ hasOpenCC: false });
+  harness.api.start();
+  harness.api.setSitePreference('s2t');
+  assert.equal(harness.api.preference(), 's2t');
+  assert.equal(harness.api.effectiveState(), 'off');
+  assert.equal(harness.observations.length, 0);
+  assert.equal(harness.scans, 0);
+});
+
+test('reset clears both site preferences and legacy exclusions', () => {
+  const harness = loadUserscript({ whitelist: ['legacy.test'],
+    sitePreferences: { 'example.test': 's2t', 'other.test': 'off' } });
+  harness.api.resetAllSettings();
+  assert.deepEqual(harness.storage.get('zh-t2s-site-preferences'), {});
+  assert.deepEqual(harness.storage.get('zh-t2s-whitelist'), []);
+  assert.equal(harness.reloads, 1);
+});
+
 test('state changes keep whitelisted pages inactive until removed from whitelist', () => {
   const harness = loadUserscript({ whitelist: ['example.test'] });
   for (const direction of ['s2t', 't2s', 'off', 't2s']) {
@@ -18,7 +161,7 @@ test('state changes keep whitelisted pages inactive until removed from whitelist
     assert.equal(harness.observations.length, 0);
   }
   assert.equal(harness.storage.get('zh-t2s-enabled'), 't2s');
-  harness.api.toggleWhitelist();
+  harness.api.setSitePreference('follow');
   assert.equal(harness.api.effectiveState(), 't2s');
   assert.ok(harness.scans > 0);
   assert.equal(harness.observations.length, 1);

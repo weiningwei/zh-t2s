@@ -9,16 +9,23 @@ const source = readFileSync(resolve(__dirname, '../../zh-t2s.user.js'), 'utf8');
 
 // 仅替换 IIFE 的末尾以取得函数引用；加载整个真实脚本，不复制其功能实现。
 // document 保持 loading，不触发网页扫描的启动入口。
-function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = {}) {
+function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
+  sitePreferences = {}, state = 't2s', hostname = 'example.test', hasOpenCC = true } = {}) {
   const storage = new Map([['zh-t2s-dictionary', structuredClone(dictionary)]]);
   storage.set('zh-t2s-whitelist', structuredClone(whitelist));
+  storage.set('zh-t2s-site-preferences', structuredClone(sitePreferences));
+  storage.set('zh-t2s-enabled', state);
+  storage.set('zh-t2s-floatbtn', false);
   const observations = [];
   const timers = new Map();
   const dialogs = [];
   const downloads = [];
+  const broadcasts = [];
+  let receiveBroadcast;
   let timerId = 0;
   let writeError = null;
   let scans = 0;
+  let reloads = 0;
 
   // 模拟编辑器及转换队列使用的 DOM/事件边界；不模拟排版或事件冒泡。
   class Element {
@@ -146,10 +153,14 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
     } };
   };
   const sandbox = {
-    performance, console: { warn() {} }, document, location: { hostname: 'example.test' },
+    performance, console: { warn() {} }, document, location: { hostname, reload() { reloads++; } },
     Node: { ELEMENT_NODE: 1, TEXT_NODE: 3, DOCUMENT_NODE: 9, DOCUMENT_FRAGMENT_NODE: 11 },
     NodeFilter: { SHOW_TEXT: 4, SHOW_ELEMENT: 1, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
     MutationObserver: class { observe(...args) { observations.push(args); } disconnect() {} },
+    BroadcastChannel: class {
+      addEventListener(name, callback) { receiveBroadcast = callback; }
+      postMessage(data) { broadcasts.push(data); }
+    },
     GM_getValue: (key, fallback) => storage.has(key) ? structuredClone(storage.get(key)) : fallback,
     GM_setValue: (key, value) => {
       if (writeError) throw writeError;
@@ -163,7 +174,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
   };
   sandbox.window = {
     // 不测 OpenCC 自身的字形字典；用恒等转换器隔离脚本的自定义规则行为。
-    OpenCC: { Converter: () => text => text }, confirm: () => true,
+    OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined, confirm: () => true,
     setTimeout: sandbox.setTimeout
   };
   const marker = '\n})();';
@@ -172,15 +183,20 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
     globalThis.api = {
       validateDictionary, buildDictionaryTries, applyDictionary, splitDictionaryLine,
       saveDictionary, mayConvertText, safeConvert, openDictionaryEditor,
-      setState, toggleWhitelist, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
+      setState, setSitePreference, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
+      setPageState, setTraditionalStyle, syncSitePreferenceFromStorage, start,
+      renderSitePreferenceControl, resetAllSettings,
+      preference: () => sitePreference,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });
 
   return {
-    api: sandbox.api, storage, timers, downloads, observations, document,
+    api: sandbox.api, storage, timers, downloads, observations, document, broadcasts,
+    receiveBroadcast(data) { receiveBroadcast({ data }); },
     failWrites(error) { writeError = error; },
     get scans() { return scans; },
+    get reloads() { return reloads; },
     openEditor() {
       sandbox.api.openDictionaryEditor();
       const dialog = dialogs.at(-1);
