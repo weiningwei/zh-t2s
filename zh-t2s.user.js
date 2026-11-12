@@ -1198,6 +1198,7 @@
     dialog.className = 'ignore-opencc';
     dialog.setAttribute('aria-label', '自定义词典');
     Object.assign(dialog.style, {
+      position: 'fixed', inset: '0', margin: 'auto',
       width: '560px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
       boxSizing: 'border-box', padding: '0', border: '1px solid #dce2eb', borderRadius: '14px',
       background: '#fff', color: '#1f2329', boxShadow: '0 16px 64px #0005', overflow: 'auto'
