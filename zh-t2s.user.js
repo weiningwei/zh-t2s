@@ -1325,6 +1325,39 @@
     render();
   }
 
+
+  let selectionSnapshot = '';
+  function convertSelectedText(text, direction) {
+    if (text.length > 20000) throw new Error('最多转换 20000 个字符。');
+    if (!hasOpenCC) throw new Error('转换引擎未加载。');
+    if (!['t2s', 's2t'].includes(direction)) throw new Error('转换方向无效。');
+    return applyDictionary(text, converterForState(direction), dictionaryTries[direction]);
+  }
+  function openSelectionTool() {
+    const text = selectionSnapshot;
+    const { root, close, setStatus } = openToolDialog('选中文字转换', `
+      <p>转换当前选中的显示文本，也可粘贴文字。沿用当前字形与词典。最多20000字符。</p>
+      <textarea data-source aria-label="待转换文字" maxlength="20000"></textarea>
+      <div class="actions"><button data-dir="t2s">繁→简</button><button data-dir="s2t">简→繁</button></div>
+      <textarea data-result aria-label="转换结果" readonly></textarea>
+      <div class="actions"><button data-copy>复制结果</button><button data-close>关闭</button></div>`);
+    const source = root.querySelector('[data-source]');
+    const output = root.querySelector('[data-result]');
+    source.value = text.length <= 20000 ? text : '';
+    if (text.length > 20000) setStatus('选区超过20000字符，请缩小范围或粘贴部分文字。', true);
+    for (const button of root.querySelectorAll('[data-dir]')) button.addEventListener('click', () => {
+      try { output.value = convertSelectedText(source.value, button.dataset.dir); setStatus('转换完成。'); }
+      catch (e) { setStatus(e.message, true); }
+    });
+    root.querySelector('[data-copy]').addEventListener('click', async () => {
+      try {
+        if (!window.navigator?.clipboard?.writeText) throw new Error('请手动复制已选中的结果。');
+        await window.navigator.clipboard.writeText(output.value); setStatus('已复制结果。');
+      } catch (e) { output.focus(); output.select(); setStatus(e.message, true); }
+    });
+    root.querySelector('[data-close]').addEventListener('click', close);
+  }
+
   const SETTINGS_BACKUP_LIMIT = 16 * 1024 * 1024;
 
   /** 备份只接受已知字段，复制后再使用，不将任意 JSON 键写入 GM 存储。 */
@@ -1793,6 +1826,7 @@
     renderGlobalPreferenceControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
+    floatPanel.appendChild(floatPanelRow('选中文字转换', openSelectionTool, { control: 'selection' }));
     const footer = document.createElement('div');
     footer.className = 'zh-t2s-footer';
     footer.appendChild(floatPanelRow('站点偏好管理', openSiteManager, { control: 'sites' }));
@@ -1828,6 +1862,7 @@
 
   function openFloatPanel() {
     if (floatPanelOpen) return;
+    selectionSnapshot = window.getSelection?.()?.toString() || '';
     syncSitePreferenceFromStorage();
     floatPanelOpen = true;
     floatPanel = document.createElement('div');
