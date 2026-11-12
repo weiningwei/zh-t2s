@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 修复
+
+- 自定义词典说明明确区分表格粘贴的制表符和手动按 Tab 键：前者作为分隔符识别，后者跳到下一个控件。
+
 ## [2.13.1] - 2026-11-12
 
 ### 修复
