@@ -1,0 +1,23 @@
+CHANGELOG.md
+  s_f9ff45d9a7a1e4::t_036f1aa57617fe 9-10
+README.md
+  s_f9ff45d9a7a1e4::t_82cfbe89a9ef6c 150-153
+zh-t2s.user.js
+  s_f9ff45d9a7a1e4::t_fc3bd28a3bd817 399,401,446-453,455,995,1816
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "35060e1b745bba5add82ad9a80ca6e7987cc3723",
+  "prompts": {},
+  "sessions": {
+    "s_f9ff45d9a7a1e4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d04d-a1b0-7733-8a0f-ac35468cb756",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
