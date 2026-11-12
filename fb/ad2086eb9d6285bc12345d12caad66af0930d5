@@ -1,0 +1,21 @@
+.github/scripts/userscript-harness.cjs
+  s_3fc0ba08ec836b::t_8459c547d9545b 202
+.github/scripts/userscript.test.cjs
+  s_3fc0ba08ec836b::t_a8dd761ee79ead 588-604
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fbad2086eb9d6285bc12345d12caad66af0930d5",
+  "prompts": {},
+  "sessions": {
+    "s_3fc0ba08ec836b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cfe6-0657-7c83-8593-217ed33b9752",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
