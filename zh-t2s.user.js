@@ -976,12 +976,44 @@
     });
   }
 
+
+  // 一次读取、比较并安装配置，避免方向/字形/词典同时变化时反复全页重扫。
+  function syncPageSettings() {
+    if (typeof GM_getValue !== 'function') return;
+    try {
+      const saved = GM_getValue(STATE_KEY, 't2s');
+      const nextState = saved === '0' ? 'off' : saved === '1' ? 't2s' : saved;
+      const nextStyle = GM_getValue(TRAD_STYLE_KEY, 'tw');
+      const nextSite = readSitePreferences()[currentHost] || 'follow';
+      const nextDictionary = readStoredDictionary();
+      const nextLocal = readSiteDictionary();
+      const nextIgnore = readIgnoreRules();
+      if (!['t2s', 's2t', 'off'].includes(nextState) || !['tw', 'hk'].includes(nextStyle) || !nextDictionary) return;
+      const dictionaryChanged = JSON.stringify([dictionary, siteDictionary]) !== JSON.stringify([nextDictionary, nextLocal]);
+      const ignoreChanged = JSON.stringify(ignoreRules) !== JSON.stringify(nextIgnore);
+      const styleChanged = traditionalStyle !== nextStyle;
+      const oldState = effectiveState();
+      const changed = dictionaryChanged || ignoreChanged || styleChanged || state !== nextState || sitePreference !== nextSite;
+      if (!changed) return;
+      const compiled = dictionaryChanged ? buildDictionaryTries(mergeDictionaries(nextDictionary, nextLocal)) : null;
+      state = nextState; traditionalStyle = nextStyle; sitePreference = nextSite;
+      if (nextState !== 'off') lastDirection = nextState;
+      if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+      if (compiled) {
+        dictionary = nextDictionary; siteDictionary = nextLocal;
+        dictionaryTries = compiled.tries; dictionaryNonHanStart = compiled.nonHanStart;
+      }
+      if (ignoreChanged) installIgnoreRules(nextIgnore);
+      applyState(oldState, effectiveState(), dictionaryChanged || ignoreChanged || (styleChanged && effectiveState() === 's2t'));
+      refreshMenu();
+    } catch (e) { console.warn('[zh-t2s] 设置同步失败，稍后重试。', e); }
+  }
+
   // 词典不走广播：BroadcastChannel 仅同源，而词典全站生效；
   // 其他页面保存后，本标签在切回前台时读取存储按需同步，只重扫真正用到的标签。
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      syncSitePreferenceFromStorage();
-      syncDictionaryFromStorage();
+      syncPageSettings();
     }
   });
 
