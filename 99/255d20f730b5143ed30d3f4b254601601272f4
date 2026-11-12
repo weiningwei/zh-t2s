@@ -1,0 +1,27 @@
+.github/scripts/check-userscript.cjs
+  s_d32fb26406244e::t_9a2eac6b337549 47-49
+zh-t2s.user.js
+  s_d32fb26406244e::t_9a2eac6b337549 29-30,1030-1031,1215-1219
+CHANGELOG.md
+  s_d32fb26406244e::t_9a2eac6b337549 11
+docs/DEVELOPMENT.md
+  s_d32fb26406244e::t_9a2eac6b337549 9,84
+README.md
+  s_d32fb26406244e::t_9a2eac6b337549 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "99255d20f730b5143ed30d3f4b254601601272f4",
+  "prompts": {},
+  "sessions": {
+    "s_d32fb26406244e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d02b-ddc5-7cc0-9b92-e853a2de971a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
