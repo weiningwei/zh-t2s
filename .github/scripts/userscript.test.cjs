@@ -9,6 +9,149 @@ const data = (t2s = [], s2t = []) => ({ t2s, s2t });
 const editorSelector = direction => '[data-editor="' + direction + '"]';
 const actionSelector = action => '[data-action="' + action + '"]';
 
+test('full settings export reads current storage and merges legacy exclusions with explicit site choices', async () => {
+  const harness = loadUserscript({ whitelist: ['legacy.test', 'example.test'] });
+  harness.storage.set('zh-t2s-site-preferences', { 'example.test': 'follow', 'new.test': 's2t' });
+  harness.storage.set('zh-t2s-enabled', 'off');
+  harness.storage.set('zh-t2s-lastdir', 's2t');
+  harness.storage.set('zh-t2s-traditional-style', 'hk');
+  harness.storage.set('zh-t2s-shortcut-t2s', { key: 'T', ctrl: true, alt: true, shift: false, meta: false });
+  harness.storage.set('zh-t2s-dictionary', data([['新词', '结果']]));
+  harness.storage.set('zh-t2s-floatpos', { left: '12.5px', top: '30px' });
+  const backup = harness.openBackup();
+  await backup.get(actionSelector('export')).click();
+  const exported = JSON.parse(await harness.downloads[0].text());
+  assert.equal(exported.format, 'zh-t2s-settings');
+  assert.equal(exported.schemaVersion, 1);
+  assert.equal(exported.settings.state, 'off');
+  assert.equal(exported.settings.lastDirection, 's2t');
+  assert.equal(exported.settings.traditionalStyle, 'hk');
+  assert.equal(exported.settings.shortcuts.t2s.key, 'T');
+  assert.equal(exported.settings.shortcuts.t2s.ctrl, true);
+  assert.deepEqual(exported.settings.sitePreferences, { 'legacy.test': 'off', 'example.test': 'follow', 'new.test': 's2t' });
+  assert.deepEqual(exported.settings.dictionary, data([['新词', '结果']]));
+  assert.deepEqual(exported.settings.floatButton, { enabled: false, position: { left: '12.5px', top: '30px' } });
+  assert.equal(harness.scans, 0);
+  assert.equal(harness.writes.length, 0);
+});
+
+test('full settings restore validates first and writes without scans or broadcasts, then reloads once', () => {
+  const source = loadUserscript({ state: 'off', sitePreferences: { 'example.test': 's2t' },
+    dictionary: data([['原词', '自定义结果']]), whitelist: ['legacy.test'] });
+  source.storage.set('zh-t2s-lastdir', 's2t');
+  source.storage.set('zh-t2s-traditional-style', 'hk');
+  source.storage.set('zh-t2s-floatpos', { left: '100px', top: '200px' });
+  const original = plain(source.api.createSettingsBackup());
+  const destination = loadUserscript({ whitelist: ['discard.test'] });
+  destination.api.restoreSettingsBackup(original);
+  assert.deepEqual(plain(destination.api.createSettingsBackup()), original);
+  assert.deepEqual(destination.storage.get('zh-t2s-whitelist'), []);
+  assert.equal(destination.reloads, 1);
+  assert.equal(destination.scans, 0);
+  assert.equal(destination.broadcasts.length, 0);
+  assert.equal(destination.api.effectiveState(), 't2s'); // 在刷新前不安装部分配置。
+});
+
+test('full settings validation rejects invalid fields and never writes them', () => {
+  const harness = loadUserscript();
+  const base = plain(harness.api.createSettingsBackup());
+  const changes = [
+    backup => { backup.schemaVersion = 2; },
+    backup => { backup.settings.state = 'anything'; },
+    backup => { backup.settings.lastDirection = 'off'; },
+    backup => { backup.settings.traditionalStyle = 't'; },
+    backup => { backup.settings.shortcuts.s2t.ctrl = 'true'; },
+    backup => { backup.settings.sitePreferences = { 'bad.test/path': 'off' }; },
+    backup => { backup.settings.dictionary = data([['重复', '1'], ['重复', '2']]); },
+    backup => { backup.settings.floatButton.enabled = 'false'; },
+    backup => { backup.settings.floatButton.position = { left: 'url(bad)', top: '4px' }; }
+  ];
+  for (const change of changes) {
+    const invalid = structuredClone(base);
+    change(invalid);
+    assert.throws(() => harness.api.restoreSettingsBackup(invalid));
+  }
+  assert.equal(harness.writes.length, 0);
+  assert.equal(harness.reloads, 0);
+  const withExtraKeys = structuredClone(base);
+  withExtraKeys.settings['arbitrary-storage-key'] = true;
+  assert.equal('arbitrary-storage-key' in harness.api.validateSettingsBackup(withExtraKeys).settings, false);
+});
+
+test('partial restore failure rolls back all attempted keys and leaves the running converter unchanged', () => {
+  const harness = loadUserscript({ dictionary: data([['原词', '旧结果']]) });
+  const before = plain(harness.api.createSettingsBackup());
+  const next = structuredClone(before);
+  next.settings.state = 's2t';
+  next.settings.lastDirection = 's2t';
+  next.settings.traditionalStyle = 'hk';
+  let fail = true;
+  harness.failWrites(key => {
+    if (key === 'zh-t2s-dictionary' && fail) { fail = false; return new Error('模拟中途写入失败'); }
+    return null;
+  });
+  assert.throws(() => harness.api.restoreSettingsBackup(next), /模拟中途写入失败.*已回滚/);
+  assert.deepEqual(plain(harness.api.createSettingsBackup()), before);
+  assert.equal(harness.reloads, 0);
+  assert.equal(harness.scans, 0);
+  assert.equal(harness.api.safeConvert('原词'), '旧结果');
+});
+
+test('backup UI requires valid import and confirmation; failed rollback never reports success', async () => {
+  const harness = loadUserscript();
+  const backup = harness.openBackup();
+  const fileInput = backup.get('input[type="file"]');
+  const serialized = JSON.stringify(harness.api.createSettingsBackup());
+  fileInput.files = [{ size: Buffer.byteLength(serialized), text: async () => serialized }];
+  await fileInput.fire('change');
+  assert.equal(backup.get(actionSelector('save')).disabled, false);
+  assert.equal(harness.writes.length, 0);
+  harness.setConfirmation(false);
+  await backup.get(actionSelector('save')).click();
+  assert.equal(harness.writes.length, 0);
+  harness.setConfirmation(true);
+  harness.failWrites(new Error('存储不可用'));
+  await backup.get(actionSelector('save')).click();
+  assert.match(backup.get('.status').textContent, /恢复失败.*回滚失败/);
+  assert.equal(backup.get('.status').dataset.error, 'true');
+  assert.equal(harness.reloads, 0);
+  harness.failWrites(null);
+  await backup.get(actionSelector('save')).click();
+  assert.equal(harness.reloads, 1);
+});
+
+test('oversized, invalid and stale backup imports cannot enable an earlier pending restore', async () => {
+  const harness = loadUserscript();
+  const backup = harness.openBackup();
+  const fileInput = backup.get('input[type="file"]');
+  const serialized = JSON.stringify(harness.api.createSettingsBackup());
+  let resolveRead;
+  fileInput.files = [{ size: 1, text: () => new Promise(resolve => { resolveRead = resolve; }) }];
+  const slowImport = fileInput.fire('change');
+  fileInput.files = [{ size: 16 * 1024 * 1024 + 1, text: () => assert.fail('超限文件不应读取') }];
+  await fileInput.fire('change');
+  assert.match(backup.get('.status').textContent, /16 MB/);
+  resolveRead(serialized);
+  await slowImport;
+  assert.equal(backup.get(actionSelector('save')).disabled, true);
+  fileInput.files = [{ size: 2, text: async () => '{}' }];
+  await fileInput.fire('change');
+  assert.match(backup.get('.status').textContent, /导入失败/);
+  await backup.get(actionSelector('save')).click();
+  assert.equal(harness.writes.length, 0);
+  assert.equal(harness.reloads, 0);
+});
+
+test('backup export read failure reports an error and creates no download', async () => {
+  const harness = loadUserscript();
+  const backup = harness.openBackup();
+  harness.failReads(new Error('模拟读取失败'));
+  await backup.get(actionSelector('export')).click();
+  assert.match(backup.get('.status').textContent, /导出失败.*模拟读取失败/);
+  assert.equal(backup.get('.status').dataset.error, 'true');
+  assert.equal(harness.downloads.length, 0);
+});
+
 test('site preferences override global defaults, match exact hosts and survive reload', () => {
   for (const mode of ['follow', 't2s', 's2t', 'off']) {
     const harness = loadUserscript({ state: 'off', sitePreferences: { 'example.test': mode } });

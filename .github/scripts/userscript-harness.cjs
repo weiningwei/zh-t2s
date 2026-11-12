@@ -21,9 +21,13 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   const dialogs = [];
   const downloads = [];
   const broadcasts = [];
+  const writes = [];
+  const confirmations = [];
+  let confirmation = true;
   let receiveBroadcast;
   let timerId = 0;
   let writeError = null;
+  let readError = null;
   let scans = 0;
   let reloads = 0;
 
@@ -106,7 +110,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       button.setAttribute('aria-pressed', String(direction === 't2s'));
       controls.set('[data-direction="' + direction + '"]', button);
     }
-    for (const selector of ['.status', '[data-preview-input]', '[data-preview-out]', 'input[type="file"]',
+    for (const selector of ['h2', '.status', '[data-preview-input]', '[data-preview-out]', 'input[type="file"]',
       ...['import', 'export', 'cancel', 'save'].map(action => '[data-action="' + action + '"]')]) {
       controls.set(selector, new Element());
     }
@@ -161,9 +165,14 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       addEventListener(name, callback) { receiveBroadcast = callback; }
       postMessage(data) { broadcasts.push(data); }
     },
-    GM_getValue: (key, fallback) => storage.has(key) ? structuredClone(storage.get(key)) : fallback,
+    GM_getValue: (key, fallback) => {
+      if (readError) throw readError;
+      return storage.has(key) ? structuredClone(storage.get(key)) : fallback;
+    },
     GM_setValue: (key, value) => {
-      if (writeError) throw writeError;
+      writes.push({ key, value: structuredClone(value) });
+      const error = typeof writeError === 'function' ? writeError(key, value) : writeError;
+      if (error) throw error;
       storage.set(key, structuredClone(value));
     },
     GM_registerMenuCommand() { return 1; }, GM_unregisterMenuCommand() {},
@@ -174,7 +183,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   };
   sandbox.window = {
     // 不测 OpenCC 自身的字形字典；用恒等转换器隔离脚本的自定义规则行为。
-    OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined, confirm: () => true,
+    OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined,
+    confirm(message) { confirmations.push(message); return confirmation; },
     setTimeout: sandbox.setTimeout
   };
   const marker = '\n})();';
@@ -186,19 +196,28 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       setState, setSitePreference, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
       setPageState, setTraditionalStyle, syncSitePreferenceFromStorage, start,
       renderSitePreferenceControl, renderGlobalPreferenceControl, resetAllSettings,
+      validateSettingsBackup, createSettingsBackup, restoreSettingsBackup, openSettingsBackup, openToolDialog,
       preference: () => sitePreference,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });
 
   return {
-    api: sandbox.api, storage, timers, downloads, observations, document, broadcasts,
+    api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations,
     receiveBroadcast(data) { receiveBroadcast({ data }); },
     failWrites(error) { writeError = error; },
+    failReads(error) { readError = error; },
+    setConfirmation(value) { confirmation = value; },
     get scans() { return scans; },
     get reloads() { return reloads; },
     openEditor() {
       sandbox.api.openDictionaryEditor();
+      const dialog = dialogs.at(-1);
+      const root = dialog.children[0].shadowRoot;
+      return { dialog, root, get: selector => root.querySelector(selector) };
+    },
+    openBackup() {
+      sandbox.api.openSettingsBackup();
       const dialog = dialogs.at(-1);
       const root = dialog.children[0].shadowRoot;
       return { dialog, root, get: selector => root.querySelector(selector) };

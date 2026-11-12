@@ -940,7 +940,7 @@
    * 表单聚焦时（input/textarea/contenteditable）不响应。
    * ============================================================ */
   document.addEventListener('keydown', (e) => {
-    if (dictionaryDialog && dictionaryDialog.open) return; // Shadow DOM 内编辑时同样抑制转换快捷键
+    if ((dictionaryDialog && dictionaryDialog.open) || (toolDialog && toolDialog.open)) return;
     const ae = document.activeElement;
     const inForm = ae && (
       ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' ||
@@ -1239,6 +1239,208 @@
     header.appendChild(main);
     header.appendChild(close);
     return header;
+  }
+
+  // 低频工具共用模态外壳；调用时才创建 DOM，内容必须为代码内静态模板。
+  let toolDialog = null;
+  function openToolDialog(title, contentHTML) {
+    closeFloatPanel();
+    if (toolDialog) toolDialog.close();
+    const previousFocus = document.activeElement;
+    const dialog = document.createElement('dialog');
+    dialog.className = 'ignore-opencc';
+    dialog.setAttribute('aria-label', title);
+    Object.assign(dialog.style, {
+      position: 'fixed', inset: '0', margin: 'auto', width: '560px',
+      maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
+      boxSizing: 'border-box', padding: '0', border: '1px solid #dce2eb', borderRadius: '14px',
+      background: '#fff', color: '#1f2329', boxShadow: '0 16px 64px #0005', overflow: 'auto'
+    });
+    const host = document.createElement('div');
+    dialog.appendChild(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = `<style>
+      *{box-sizing:border-box}[hidden]{display:none!important}
+      .body{padding:20px;font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif;color:#1f2329;background:#fff}
+      h2{font-size:18px;margin:0 0 8px}p{margin:8px 0;color:#596579}.hint{font-size:12px}
+      button,input,textarea,select{font:inherit;color:#263449}
+      button,select{border:1px solid #d4dce8;border-radius:8px;padding:7px 12px;background:#f6f8fb}
+      button{cursor:pointer}button:disabled{opacity:.5;cursor:default}.primary{background:#2f6bff;color:white;border-color:#2f6bff}
+      button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #2f6bff;outline-offset:2px}
+      textarea,input[type="text"]{display:block;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:white}
+      textarea{min-height:120px;resize:vertical}.actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:16px}
+      .status{min-height:24px;color:#596579;white-space:pre-wrap;overflow-wrap:anywhere}.status[data-error="true"]{color:#b42318}
+    </style><div class="body"><h2></h2>${contentHTML}<div class="status" role="status" aria-live="polite"></div></div>`;
+    root.querySelector('h2').textContent = title;
+    const status = root.querySelector('.status');
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); dialog.close(); });
+    dialog.addEventListener('close', () => {
+      if (toolDialog === dialog) toolDialog = null;
+      dialog.remove();
+      const target = previousFocus?.isConnected ? previousFocus : floatBtn;
+      target?.focus({ preventScroll: true });
+    });
+    document.documentElement.appendChild(dialog);
+    toolDialog = dialog;
+    dialog.showModal();
+    return { dialog, root, close: () => dialog.close(), setStatus(message, error = false) {
+      status.textContent = message;
+      status.dataset.error = String(error);
+    } };
+  }
+
+  const SETTINGS_BACKUP_LIMIT = 16 * 1024 * 1024;
+
+  /** 备份只接受已知字段，复制后再使用，不将任意 JSON 键写入 GM 存储。 */
+  function validateSettingsBackup(data) {
+    const record = (value) => value && typeof value === 'object' && !Array.isArray(value);
+    if (!record(data) || data.format !== 'zh-t2s-settings' || data.schemaVersion !== 1 || !record(data.settings)) {
+      throw new Error('不是受支持的 zh-t2s 设置备份（schemaVersion 必须为 1）。');
+    }
+    const settings = data.settings;
+    if (!['t2s', 's2t', 'off'].includes(settings.state) || !['t2s', 's2t'].includes(settings.lastDirection) ||
+        !['tw', 'hk'].includes(settings.traditionalStyle)) throw new Error('方向或繁体字形无效。');
+    if (!record(settings.shortcuts)) throw new Error('快捷键设置无效。');
+    const shortcuts = {};
+    for (const direction of ['t2s', 's2t']) {
+      const shortcut = settings.shortcuts[direction];
+      if (!record(shortcut) || typeof shortcut.key !== 'string' || !shortcut.key.length || shortcut.key.length > 32 ||
+          /[\u0000-\u001f\u007f]/.test(shortcut.key) ||
+          ['ctrl', 'alt', 'shift', 'meta'].some(key => typeof shortcut[key] !== 'boolean')) {
+        throw new Error('快捷键设置无效：' + direction + '。');
+      }
+      shortcuts[direction] = { key: shortcut.key, ctrl: shortcut.ctrl, alt: shortcut.alt, shift: shortcut.shift, meta: shortcut.meta };
+    }
+    if (!record(settings.sitePreferences) || Object.keys(settings.sitePreferences).length > 10000) {
+      throw new Error('站点偏好无效或超过 10000 个网站。');
+    }
+    const sites = Object.create(null);
+    for (const [host, mode] of Object.entries(settings.sitePreferences)) {
+      if (!host || host.length > 253 || !/^(?:[a-z0-9._-]+|\[[a-f0-9:.]+\])$/i.test(host) || !SITE_MODES.includes(mode)) {
+        throw new Error('站点偏好包含无效域名或方向。');
+      }
+      sites[host] = mode;
+    }
+    const button = settings.floatButton;
+    if (!record(button) || typeof button.enabled !== 'boolean' ||
+        (button.position !== null && (!record(button.position) || ['left', 'top'].some(key =>
+          typeof button.position[key] !== 'string' || !/^-?\d+(?:\.\d+)?px$/.test(button.position[key]) ||
+          !Number.isFinite(parseFloat(button.position[key])) || Math.abs(parseFloat(button.position[key])) > 1000000)))) {
+      throw new Error('浮动按钮设置无效。');
+    }
+    return { format: 'zh-t2s-settings', schemaVersion: 1, settings: {
+      state: settings.state, lastDirection: settings.lastDirection, traditionalStyle: settings.traditionalStyle,
+      shortcuts, sitePreferences: sites, dictionary: validateDictionary(settings.dictionary),
+      floatButton: { enabled: button.enabled, position: button.position === null ? null : {
+        left: button.position.left, top: button.position.top
+      } }
+    } };
+  }
+
+  function createSettingsBackup() {
+    if (typeof GM_getValue !== 'function') throw new Error('当前环境不支持读取设置。');
+    const savedState = GM_getValue(STATE_KEY, 't2s');
+    const direction = savedState === '0' ? 'off' : savedState === '1' ? 't2s' : savedState;
+    return validateSettingsBackup({ format: 'zh-t2s-settings', schemaVersion: 1, settings: {
+      state: direction, lastDirection: GM_getValue(LAST_DIR_KEY, direction === 's2t' ? 's2t' : 't2s'),
+      traditionalStyle: GM_getValue(TRAD_STYLE_KEY, 'tw'),
+      shortcuts: {
+        t2s: GM_getValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false }),
+        s2t: GM_getValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false })
+      },
+      sitePreferences: readSitePreferences(), dictionary: GM_getValue(DICTIONARY_KEY, { t2s: [], s2t: [] }),
+      floatButton: { enabled: GM_getValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT), position: GM_getValue(FLOAT_BTN_POS, null) }
+    } });
+  }
+
+  /** 多键写入先保存原值；失败尝试回滚，成功只刷新一次，不逐项还原、重扫 DOM。 */
+  function restoreSettingsBackup(data) {
+    const settings = validateSettingsBackup(data).settings;
+    if (typeof GM_getValue !== 'function' || typeof GM_setValue !== 'function') throw new Error('当前环境不支持保存设置。');
+    const entries = [
+      [STATE_KEY, settings.state, 't2s'], [LAST_DIR_KEY, settings.lastDirection, 't2s'],
+      [TRAD_STYLE_KEY, settings.traditionalStyle, 'tw'],
+      [SHORTCUT_KEY_T2S, settings.shortcuts.t2s, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false }],
+      [SHORTCUT_KEY_S2T, settings.shortcuts.s2t, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false }],
+      [SITE_PREFERENCES_KEY, settings.sitePreferences, {}], [WHITELIST_KEY, [], []],
+      [DICTIONARY_KEY, settings.dictionary, { t2s: [], s2t: [] }],
+      [FLOAT_BTN_KEY, settings.floatButton.enabled, FLOAT_BTN_DEFAULT], [FLOAT_BTN_POS, settings.floatButton.position, null]
+    ];
+    const previous = entries.map(([key, , fallback]) => GM_getValue(key, fallback));
+    let attempted = 0;
+    try {
+      for (let index = 0; index < entries.length; index++) {
+        attempted = index + 1;
+        GM_setValue(entries[index][0], entries[index][1]);
+      }
+    } catch (error) {
+      let rollbackFailed = false;
+      for (let index = attempted - 1; index >= 0; index--) {
+        try { GM_setValue(entries[index][0], previous[index]); }
+        catch (e) { rollbackFailed = true; }
+      }
+      throw new Error(error.message + (rollbackFailed
+        ? '；部分设置回滚失败，请保留备份并重试恢复。' : '；已回滚本次写入。'));
+    }
+    location.reload();
+  }
+
+  function openSettingsBackup() {
+    const { root, dialog, close, setStatus } = openToolDialog('设置备份与恢复', `
+      <p>备份方向、字形、快捷键、全部站点偏好、自定义词典及浮动按钮设置。</p>
+      <p class="hint">恢复会覆盖所有设置并刷新当前页面；其他已打开页面刷新后完整应用。仅接受本工具导出的 JSON，最大 16 MB。</p>
+      <input type="file" accept=".json,application/json" hidden>
+      <div class="actions">
+        <button type="button" data-action="export">导出全部设置</button>
+        <button type="button" data-action="import">选择备份</button>
+        <button type="button" data-action="cancel">关闭</button>
+        <button type="button" class="primary" data-action="save" disabled>恢复并刷新</button>
+      </div>`);
+    const fileInput = root.querySelector('input[type="file"]');
+    const restore = root.querySelector('[data-action="save"]');
+    let pending = null;
+    let importRevision = 0;
+    restore.disabled = true;
+    root.querySelector('[data-action="cancel"]').addEventListener('click', close);
+    root.querySelector('[data-action="import"]').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      const revision = ++importRevision;
+      pending = null;
+      restore.disabled = true;
+      try {
+        if (file.size > SETTINGS_BACKUP_LIMIT) throw new Error('文件不能超过 16 MB。');
+        const next = validateSettingsBackup(JSON.parse(await file.text()));
+        if (!dialog.isConnected || revision !== importRevision) return;
+        pending = next;
+        restore.disabled = false;
+        const settings = next.settings;
+        setStatus('备份校验通过：' + Object.keys(settings.sitePreferences).length + ' 个网站，' +
+          (settings.dictionary.t2s.length + settings.dictionary.s2t.length) + ' 条词典规则。点击“恢复并刷新”后生效。');
+      } catch (e) { if (dialog.isConnected && revision === importRevision) setStatus('导入失败：' + e.message, true); }
+      finally { fileInput.value = ''; }
+    });
+    restore.addEventListener('click', () => {
+      if (!pending || !window.confirm('确定覆盖全部设置并刷新当前页面？\n建议先导出当前设置备份。')) return;
+      try { restoreSettingsBackup(pending); }
+      catch (e) { setStatus('恢复失败：' + e.message, true); }
+    });
+    root.querySelector('[data-action="export"]').addEventListener('click', () => {
+      try {
+        const blob = new Blob([JSON.stringify(createSettingsBackup(), null, 2)], { type: 'application/json' });
+        if (blob.size > SETTINGS_BACKUP_LIMIT) throw new Error('备份超过 16 MB，请先清理设置。');
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'zh-t2s-settings.json';
+        root.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setStatus('已导出全部已保存设置。');
+      } catch (e) { setStatus('导出失败：' + e.message, true); }
+    });
   }
 
   // 独立模态编辑器：不随 refreshMenu 重绘，草稿只在保存时写入 GM 存储。
@@ -1557,6 +1759,7 @@
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
     const footer = document.createElement('div');
     footer.className = 'zh-t2s-footer';
+    footer.appendChild(floatPanelRow('设置备份与恢复', openSettingsBackup, { control: 'backup' }));
     footer.appendChild(floatPanelRow('隐藏浮动按钮', () => setFloatBtnEnabled(false), { control: 'hide' }));
     footer.appendChild(floatPanelRow('重置所有设置', resetAllSettings, { danger: true, control: 'reset' }));
     floatPanel.appendChild(footer);

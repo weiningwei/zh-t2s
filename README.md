@@ -131,3 +131,11 @@
 问题请提交到 [GitHub Issues](https://github.com/weiningwei/zh-t2s/issues)，历史变更见 [CHANGELOG](CHANGELOG.md)。修改源码、扫描与同步机制见 [维护说明](docs/DEVELOPMENT.md)，截图更新见 [截图说明](docs/README.md)。
 
 许可证：[MIT](LICENSE)。
+
+### 全部设置备份恢复
+
+面板底部“设置备份与恢复”可导出全部已保存设置。导入 JSON 校验后确认覆盖，成功后刷新一次；失败尝试回滚并提示。词典独立 JSON 入口仍可使用。
+
+### 全部设置备份恢复
+
+面板底部“设置备份与恢复”可导出全部已保存设置。导入 JSON 校验后确认覆盖，成功后刷新一次；失败尝试回滚并提示。词典独立 JSON 入口仍可使用。
