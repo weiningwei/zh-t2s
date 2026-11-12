@@ -1,0 +1,31 @@
+README.md
+  s_d32fb26406244e::t_45b1ba384f6f7a 38,46-48,60
+.github/scripts/userscript.test.cjs
+  s_d32fb26406244e::t_883283ebfa1204 113,122-139
+  s_d32fb26406244e::t_74b4b3a255ba37 140-141
+docs/DEVELOPMENT.md
+  s_d32fb26406244e::t_45b1ba384f6f7a 45-50
+.github/scripts/userscript-harness.cjs
+  s_d32fb26406244e::t_883283ebfa1204 188
+zh-t2s.user.js
+  s_d32fb26406244e::t_6963d9dbb6e01d 994,1000,1053-1057,1106,1108,1118-1125,1181,1226-1230,1549,1552-1553,1586,1592,1594
+  s_d32fb26406244e::t_65359c3175efe5 1004-1040,1109,1177-1180,1182-1184,1195-1197,1203,1205-1214,1216-1225,1231-1233,1458,1460-1462,1464,1468-1486,1489,1491-1492,1497-1514,1517-1519,1522-1525,1527-1544,1547,1550-1551,1554-1578,1582-1583,1588-1589,1593,1595-1598
+CHANGELOG.md
+  s_d32fb26406244e::t_45b1ba384f6f7a 14-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "24db1eb3cd7b882b00200e68364319ef6a7ffbb6",
+  "prompts": {},
+  "sessions": {
+    "s_d32fb26406244e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d02b-ddc5-7cc0-9b92-e853a2de971a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
