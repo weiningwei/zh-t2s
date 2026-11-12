@@ -1492,6 +1492,12 @@
 
 
   let selectionSnapshot = '';
+  /** 读取当前选区；为空时沿用上次快照，面板打开后再选文字也能直接转换 */
+  function captureSelection() {
+    const selected = window.getSelection?.()?.toString() || '';
+    if (selected) selectionSnapshot = selected;
+    return selectionSnapshot;
+  }
   function convertSelectedText(text, direction) {
     if (text.length > 20000) throw new Error('最多转换 20000 个字符。');
     if (!hasOpenCC) throw new Error('转换引擎未加载。');
@@ -1499,7 +1505,7 @@
     return applyDictionary(text, converterForState(direction), dictionaryTries[direction]);
   }
   function openSelectionTool() {
-    const text = selectionSnapshot;
+    const text = captureSelection();
     const { root, close, setStatus } = openToolDialog('选中文字转换', `
       <p>转换当前选中的显示文本，也可粘贴文字。沿用当前字形与词典。最多20000字符。</p>
       <textarea data-source aria-label="待转换文字" maxlength="20000"></textarea>
@@ -2034,7 +2040,7 @@
 
   function openFloatPanel() {
     if (floatPanelOpen) return;
-    selectionSnapshot = window.getSelection?.()?.toString() || '';
+    captureSelection();
     syncSitePreferenceFromStorage();
     floatPanelOpen = true;
     floatPanel = document.createElement('div');
