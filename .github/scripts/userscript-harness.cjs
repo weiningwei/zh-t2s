@@ -20,7 +20,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
   let writeError = null;
   let scans = 0;
 
-  // 只模拟编辑器使用的 DOM/事件边界；不模拟排版、浏览器焦点或事件冒泡。
+  // 模拟编辑器及转换队列使用的 DOM/事件边界；不模拟排版或事件冒泡。
   class Element {
     constructor(tag = 'div') {
       this.nodeName = this.tagName = tag.toUpperCase();
@@ -58,6 +58,12 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
         if (el.className.split(/\s+/).includes('ignore-opencc')) return el;
       }
       return null;
+    }
+    contains(node) {
+      for (let current = node; current; current = current.parentElement) {
+        if (current === this) return true;
+      }
+      return false;
     }
     remove() { this.isConnected = false; }
     setAttribute(name, value) { this.attributes.set(name, value); }
@@ -109,7 +115,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
   };
   document.createTreeWalker = () => { scans++; return { nextNode: () => false }; };
   const sandbox = {
-    console: { warn() {} }, document, location: { hostname: 'example.test' },
+    performance, console: { warn() {} }, document, location: { hostname: 'example.test' },
     Node: { ELEMENT_NODE: 1, TEXT_NODE: 3, DOCUMENT_NODE: 9, DOCUMENT_FRAGMENT_NODE: 11 },
     NodeFilter: { SHOW_TEXT: 4, SHOW_ELEMENT: 1, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
     MutationObserver: class { observe(...args) { observations.push(args); } disconnect() {} },
@@ -135,7 +141,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
     globalThis.api = {
       validateDictionary, buildDictionaryTries, applyDictionary, splitDictionaryLine,
       saveDictionary, mayConvertText, safeConvert, openDictionaryEditor,
-      setState, toggleWhitelist, effectiveState, shouldSkipText,
+      setState, toggleWhitelist, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });

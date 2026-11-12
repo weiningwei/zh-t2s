@@ -581,11 +581,8 @@
       if (!node.isConnected) continue; // 已脱离文档的节点忽略
 
       if (node.nodeType === Node.TEXT_NODE) {
-        // 不再重复调 shouldSkipText：
-        // - TreeWalker 收集的节点已在 acceptNode 中过滤
-        // - MutationObserver 进来的 characterData 是已存在文本节点，
-        //   其父元素跳过状态不会变化（若父元素是 SKIP_TAGS 早就被 REJECT）
-        convertTextNode(node);
+        // 入队后焦点、类名或父节点可能改变，写入前必须重新检查。
+        if (!shouldSkipText(node)) convertTextNode(node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         if (!SKIP_TAGS.has(node.nodeName)) convertAttributes(node);
       }

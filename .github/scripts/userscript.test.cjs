@@ -41,6 +41,35 @@ test('ignore rules follow class changes and moves into and out of ignored ancest
   assert.equal(api.shouldSkipText(text), false);
 });
 
+test('idle queue rechecks editor focus and ignore rules before writing text', () => {
+  for (const change of ['focus', 'ignore', 'move']) {
+    const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+    const parent = document.createElement('div');
+    const text = { nodeType: 3, nodeValue: '繁體', parentElement: parent, isConnected: true };
+    assert.equal(api.shouldSkipText(text), false);
+    api.enqueueSubtree(text);
+    if (change === 'focus') {
+      parent.isContentEditable = true;
+      document.activeElement = parent;
+    } else if (change === 'ignore') {
+      parent.className = 'ignore-opencc';
+    } else {
+      const ignored = document.createElement('section');
+      ignored.className = 'ignore-opencc';
+      ignored.appendChild(parent);
+    }
+    api.processQueue({ timeRemaining: () => 10 });
+    assert.equal(text.nodeValue, '繁體', change);
+    parent.isContentEditable = false;
+    document.activeElement = null;
+    parent.className = '';
+    document.documentElement.appendChild(parent);
+    api.enqueueSubtree(text);
+    api.processQueue({ timeRemaining: () => 10 });
+    assert.equal(text.nodeValue, '简体', change + ': converts when eligible again');
+  }
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
