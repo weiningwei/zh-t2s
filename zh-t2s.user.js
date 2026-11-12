@@ -1289,6 +1289,42 @@
     } };
   }
 
+
+  function manageSitePreference(host, mode) {
+    if (!Object.hasOwn(readSitePreferences(), host) || !SITE_MODES.includes(mode)) throw new Error('网站或方向无效。');
+    const next = readSitePreferences();
+    next[host] = mode; // 显式 follow 解除旧白名单。
+    GM_setValue(SITE_PREFERENCES_KEY, next);
+    syncSitePreferenceFromStorage();
+    if (channel) channel.postMessage({ type: 'zh-t2s-site-preference' });
+  }
+
+  function openSiteManager() {
+    const { root, close, setStatus } = openToolDialog('站点偏好管理', `
+      <p>搜索并修改已配置网站。选择“跟随全局”解除单独偏好，立即保存。</p>
+      <input type="text" aria-label="搜索网站" data-search>
+      <div data-list></div><div class="actions"><button data-close>关闭</button></div>`);
+    const search = root.querySelector('[data-search]');
+    const list = root.querySelector('[data-list]');
+    function render() {
+      list.textContent = '';
+      try {
+        const rows = Object.entries(readSitePreferences()).filter(([host, mode]) => mode !== 'follow' && host.includes(search.value.trim().toLowerCase()));
+        for (const [host, mode] of rows.slice(0, 100)) {
+          const row = preferenceSelect(host, [['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']], mode, value => {
+            try { manageSitePreference(host, value); render(); setStatus('已保存：' + host); }
+            catch (e) { setStatus('保存失败：' + e.message, true); }
+          }, 'managed-site');
+          list.appendChild(row);
+        }
+        setStatus('匹配 ' + rows.length + ' 个网站，最多显示 100 项，请搜索缩小范围。');
+      } catch (e) { setStatus(e.message, true); }
+    }
+    search.addEventListener('input', render);
+    root.querySelector('[data-close]').addEventListener('click', close);
+    render();
+  }
+
   const SETTINGS_BACKUP_LIMIT = 16 * 1024 * 1024;
 
   /** 备份只接受已知字段，复制后再使用，不将任意 JSON 键写入 GM 存储。 */
@@ -1759,6 +1795,7 @@
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
     const footer = document.createElement('div');
     footer.className = 'zh-t2s-footer';
+    footer.appendChild(floatPanelRow('站点偏好管理', openSiteManager, { control: 'sites' }));
     footer.appendChild(floatPanelRow('设置备份与恢复', openSettingsBackup, { control: 'backup' }));
     footer.appendChild(floatPanelRow('隐藏浮动按钮', () => setFloatBtnEnabled(false), { control: 'hide' }));
     footer.appendChild(floatPanelRow('重置所有设置', resetAllSettings, { danger: true, control: 'reset' }));
