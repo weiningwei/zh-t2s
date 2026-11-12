@@ -432,12 +432,17 @@
   let lastPageDirection = sitePreference === 's2t' || sitePreference === 't2s'
     ? sitePreference : lastDirection;
 
+  /** 本页未临时暂停时会使用的方向；暂停期间也随设置更新，供关闭后恢复沿用 */
+  function pageDirection() {
+    return sitePreference === 'follow' ? state : sitePreference;
+  }
+
   /** 当前页实际生效状态；全局修改不会覆盖站点明确选择的方向。 */
   let pagePaused = false;
   function effectiveState() {
     if (pagePaused) return 'off';
     if (!hasOpenCC) return 'off';
-    return sitePreference === 'follow' ? state : sitePreference;
+    return pageDirection();
   }
 
   function setSitePreference(mode) {
@@ -454,9 +459,9 @@
       return false;
     }
     const oldState = effectiveState();
-    if (oldState !== 'off') lastPageDirection = oldState;
     sitePreference = mode;
-    if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+    const resumed = pageDirection();
+    if (resumed !== 'off') lastPageDirection = resumed; // 暂停期间也更新，避免恢复时沿用旧方向
     sitePreferenceError = '';
     applyState(oldState, effectiveState());
     refreshMenu();
@@ -472,7 +477,8 @@
       if (next === sitePreference) return;
       const oldState = effectiveState();
       sitePreference = next;
-      if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+      const resumed = pageDirection();
+      if (resumed !== 'off') lastPageDirection = resumed;
       sitePreferenceError = '';
       applyState(oldState, effectiveState());
       refreshMenu();
@@ -935,7 +941,8 @@
     if (!['off', 't2s', 's2t'].includes(newState) || state === newState) return;
     const oldState = effectiveState();
     state = newState;
-    if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+    const resumed = pageDirection();
+    if (resumed !== 'off') lastPageDirection = resumed; // 暂停期间也更新，避免恢复时沿用旧方向
     if (newState !== 'off') lastDirection = newState; // 记住最后使用的方向，供再次开启沿用
     try {
       if (typeof GM_setValue === 'function') {
@@ -998,7 +1005,8 @@
       const compiled = dictionaryChanged ? buildDictionaryTries(mergeDictionaries(nextDictionary, nextLocal)) : null;
       state = nextState; traditionalStyle = nextStyle; sitePreference = nextSite;
       if (nextState !== 'off') lastDirection = nextState;
-      if (effectiveState() !== 'off') lastPageDirection = effectiveState();
+      const resumed = pageDirection();
+      if (resumed !== 'off') lastPageDirection = resumed;
       if (compiled) {
         dictionary = nextDictionary; siteDictionary = nextLocal;
         dictionaryTries = compiled.tries; dictionaryNonHanStart = compiled.nonHanStart;

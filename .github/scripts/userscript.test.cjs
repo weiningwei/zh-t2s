@@ -585,6 +585,23 @@ test('temporary page pause never persists or broadcasts and resumes latest direc
   assert.equal(h.api.effectiveState(), 's2t');
 });
 
+test('paused page keeps the remembered resume direction aligned with the latest setting', () => {
+  const harness = loadUserscript();
+  harness.api.setPagePaused(true);
+  harness.api.setState('s2t');
+  assert.equal(harness.api.lastPage(), 's2t'); // 暂停期间切换全局方向
+  harness.api.setSitePreference('t2s');
+  assert.equal(harness.api.lastPage(), 't2s'); // 暂停期间切换网站方向
+  harness.api.setSitePreference('off');
+  assert.equal(harness.api.lastPage(), 't2s'); // 关闭不覆盖恢复方向
+  harness.storage.set('zh-t2s-enabled', 's2t');
+  harness.api.syncPageSettings();
+  assert.equal(harness.api.effectiveState(), 'off');
+  assert.equal(harness.api.lastPage(), 't2s'); // 网站仍为不转换
+  harness.api.setSitePreference('follow');
+  assert.equal(harness.api.lastPage(), 's2t'); // 跟随全局后取最新全局方向
+});
+
 test('site dictionary overrides identical global sources and survives failed saves', () => {
   const h = loadUserscript({ dictionary: { t2s: [['繁體', 'global'], ['其他', 'other']], s2t: [] } });
   h.api.saveSiteDictionary({ t2s: [['繁體', 'local']], s2t: [] });

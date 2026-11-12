@@ -199,6 +199,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       renderSitePreferenceControl, renderGlobalPreferenceControl, resetAllSettings,
       validateSettingsBackup, createSettingsBackup, restoreSettingsBackup, openSettingsBackup, openToolDialog,
       preference: () => sitePreference,
+      lastPage: () => lastPageDirection,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });
