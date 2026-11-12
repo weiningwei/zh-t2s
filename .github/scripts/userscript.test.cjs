@@ -70,6 +70,32 @@ test('idle queue rechecks editor focus and ignore rules before writing text', ()
   }
 });
 
+test('full scans preserve nested text and attributes inside excluded tags', () => {
+  for (const tag of ['object', 'noscript', 'textarea']) {
+    const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+    const excluded = document.createElement(tag);
+    const nested = document.createElement('span');
+    const text = document.createTextNode('繁體');
+    nested.setAttribute('title', '繁體');
+    nested.appendChild(text);
+    excluded.appendChild(nested);
+    document.documentElement.appendChild(excluded);
+    api.enqueueSubtree(document.documentElement);
+    api.processQueue({ timeRemaining: () => 10 });
+    assert.equal(text.nodeValue, '繁體', tag);
+    assert.equal(nested.getAttribute('title'), '繁體', tag);
+    document.documentElement.appendChild(nested);
+    api.enqueueSubtree(document.documentElement);
+    api.processQueue({ timeRemaining: () => 10 });
+    assert.equal(text.nodeValue, '简体', tag);
+    assert.equal(nested.getAttribute('title'), '简体', tag);
+    excluded.appendChild(nested);
+    api.setState('off');
+    assert.equal(text.nodeValue, '繁體', tag + ': restore after move');
+    assert.equal(nested.getAttribute('title'), '繁體', tag + ': restore attribute after move');
+  }
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

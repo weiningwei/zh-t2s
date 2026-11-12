@@ -419,6 +419,14 @@
     return !!el.closest('.ignore-opencc');
   }
 
+  /** 文本与属性共用的元素边界，包含所有被排除的祖先。 */
+  function shouldSkipElement(el) {
+    for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
+      if (SKIP_TAGS.has(ancestor.nodeName)) return true;
+    }
+    return hasIgnoreAncestor(el);
+  }
+
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
   function inActiveEditable(node) {
     const el = node.parentElement;
@@ -432,10 +440,7 @@
   function shouldSkipText(node) {
     const el = node.parentElement;
     if (!el) return false;
-    // 快速路径：直接父元素在 SKIP_TAGS 中（script/style/noscript/textarea/xmp/plaintext 的子文本都是直系）
-    if (SKIP_TAGS.has(el.nodeName)) return true;
-    // 回退：需爬祖先链的稀有情况（.ignore-opencc 类、可编辑元素内）
-    if (hasIgnoreAncestor(el)) return true;
+    if (shouldSkipElement(el)) return true;
     if (inActiveEditable(node)) return true;
     return false;
   }
@@ -484,7 +489,7 @@
   }
 
   function convertAttributes(el) {
-    if (hasIgnoreAncestor(el)) return;
+    if (shouldSkipElement(el)) return;
     let map = attrState.get(el);
     if (!map) { map = new Map(); attrState.set(el, map); }
     let origMap = attrOriginal.get(el);
@@ -517,7 +522,7 @@
   const queue = new Set();
 
   /** 将 root 子树内所有需要处理的节点入队
-   *  - Text 节点：TreeWalker 遍历收集（跳过 SKIP_TAGS 子树）
+   *  - Text 节点：TreeWalker 遍历收集（过滤 SKIP_TAGS 内的文本）
    *  - 属性元素：querySelectorAll 一次性查询（浏览器原生 C++ 实现，远快于 JS 逐元素 hasAttribute）
    *    队列规模大幅缩小，去掉 90%+ 无目标属性的 Element 节点
    */
@@ -528,7 +533,7 @@
     if (t !== Node.ELEMENT_NODE && t !== Node.DOCUMENT_FRAGMENT_NODE && t !== Node.DOCUMENT_NODE) return;
     if (t === Node.ELEMENT_NODE && SKIP_TAGS.has(root.nodeName)) return; // 整棵子树跳过
 
-    // 1) Text 节点：TreeWalker 仅遍历文本，跳过 SKIP_TAGS 子树
+    // 1) Text 节点：TreeWalker 仅遍历文本，由过滤器检查完整祖先边界
     //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, TEXT_FILTER);
     while (walker.nextNode()) queue.add(walker.currentNode);
@@ -704,18 +709,10 @@
 
   /** 关闭转换时遍历整棵 DOM，把曾被转换过的节点还原为原始值 */
   function restoreAll() {
+    // 节点可能在转换后移入排除区域；按写入记录还原，不按当前祖先剪枝。
     const walker = document.createTreeWalker(
       document.documentElement,
-      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
-      {
-        acceptNode(node) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            if (SKIP_TAGS.has(node.nodeName)) return NodeFilter.FILTER_REJECT;
-            return NodeFilter.FILTER_ACCEPT;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        }
-      }
+      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT
     );
     while (walker.nextNode()) {
       const n = walker.currentNode;

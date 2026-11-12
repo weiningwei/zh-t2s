@@ -67,9 +67,22 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
     }
     remove() { this.isConnected = false; }
     setAttribute(name, value) { this.attributes.set(name, value); }
+    hasAttribute(name) { return this.attributes.has(name); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
-    matches() { return false; }
-    querySelectorAll() { return []; }
+    matches(selector) {
+      return selector.split(',').some(part => this.hasAttribute(part.slice(1, -1)));
+    }
+    querySelectorAll(selector) {
+      const result = [];
+      const visit = node => {
+        for (const child of node.children || []) {
+          if (child.nodeType === 1 && child.matches(selector)) result.push(child);
+          visit(child);
+        }
+      };
+      visit(this);
+      return result;
+    }
     focus() {}
     showModal() { this.open = true; }
     close() { this.open = false; return this.fire('close'); }
@@ -113,7 +126,25 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
     if (tag === 'dialog') dialogs.push(element);
     return element;
   };
-  document.createTreeWalker = () => { scans++; return { nextNode: () => false }; };
+  document.createTextNode = text => ({ nodeType: 3, nodeValue: text, isConnected: true });
+  document.createTreeWalker = (root, show, filter) => {
+    scans++;
+    const nodes = [];
+    const visit = node => {
+      for (const child of node.children || []) {
+        const shown = !!(show & (child.nodeType === 3 ? 4 : 1));
+        const accepted = shown ? (filter ? filter.acceptNode(child) : 1) : 3;
+        if (accepted === 1) nodes.push(child);
+        if (accepted !== 2) visit(child);
+      }
+    };
+    visit(root);
+    let index = 0;
+    return { currentNode: root, nextNode() {
+      this.currentNode = nodes[index++] || null;
+      return this.currentNode;
+    } };
+  };
   const sandbox = {
     performance, console: { warn() {} }, document, location: { hostname: 'example.test' },
     Node: { ELEMENT_NODE: 1, TEXT_NODE: 3, DOCUMENT_NODE: 9, DOCUMENT_FRAGMENT_NODE: 11 },
