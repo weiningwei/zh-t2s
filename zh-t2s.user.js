@@ -2082,6 +2082,7 @@
     try {
       if (typeof GM_setValue === 'function') {
         GM_setValue(STATE_KEY, 't2s');
+        GM_setValue(LAST_DIR_KEY, 't2s'); // 恢复方向也回到默认，避免重置后右键沿用旧方向
         GM_setValue(DICTIONARY_KEY, { t2s: [], s2t: [] });
         GM_setValue(SITE_DICTIONARY_KEY, {});
         GM_setValue(IGNORE_RULES_KEY, {});

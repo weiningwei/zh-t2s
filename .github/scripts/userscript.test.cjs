@@ -309,7 +309,9 @@ test('missing OpenCC keeps conversion disabled while site preferences remain con
 test('reset clears both site preferences and legacy exclusions', () => {
   const harness = loadUserscript({ whitelist: ['legacy.test'],
     sitePreferences: { 'example.test': 's2t', 'other.test': 'off' } });
+  harness.storage.set('zh-t2s-lastdir', 's2t');
   harness.api.resetAllSettings();
+  assert.equal(harness.storage.get('zh-t2s-lastdir'), 't2s');
   assert.deepEqual(harness.storage.get('zh-t2s-site-preferences'), {});
   assert.deepEqual(harness.storage.get('zh-t2s-whitelist'), []);
   assert.equal(harness.reloads, 1);
