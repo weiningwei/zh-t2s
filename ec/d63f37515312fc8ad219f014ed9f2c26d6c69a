@@ -1,0 +1,25 @@
+CHANGELOG.md
+  s_d32fb26406244e::t_6d5e99f5454812 16
+.github/scripts/userscript.test.cjs
+  s_d32fb26406244e::t_6d5e99f5454812 44-72
+zh-t2s.user.js
+  s_d32fb26406244e::t_6d5e99f5454812 584-585
+.github/scripts/userscript-harness.cjs
+  s_d32fb26406244e::t_6d5e99f5454812 23,62-67,118,144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ecd63f37515312fc8ad219f014ed9f2c26d6c69a",
+  "prompts": {},
+  "sessions": {
+    "s_d32fb26406244e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d02b-ddc5-7cc0-9b92-e853a2de971a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
