@@ -1,0 +1,35 @@
+docs/DEVELOPMENT.md
+  s_3fc0ba08ec836b::t_09356a55c7dbd5 9-13,20,23-24
+.github/scripts/version-policy.cjs
+  s_3fc0ba08ec836b::t_55ef4e428a6990 1-17
+CHANGELOG.md
+  s_3fc0ba08ec836b::t_09356a55c7dbd5 12
+.github/scripts/userscript.test.cjs
+  s_3fc0ba08ec836b::t_f927611c729e53 1-172
+.github/scripts/check-userscript.cjs
+  s_3fc0ba08ec836b::t_55ef4e428a6990 7-8,59-71
+  s_3fc0ba08ec836b::t_250c1d0029e725 72
+.github/scripts/userscript-harness.cjs
+  s_3fc0ba08ec836b::t_55ef4e428a6990 1-144
+.github/workflows/ci.yml
+  s_3fc0ba08ec836b::t_55ef4e428a6990 20,28-29,31-32
+.github/scripts/version-policy.test.cjs
+  s_3fc0ba08ec836b::t_55ef4e428a6990 1-5,9-28,58
+  s_3fc0ba08ec836b::t_09356a55c7dbd5 6-8,29-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "993df6db07f78f9ede9ad5e5dc603b81c6a69e72",
+  "prompts": {},
+  "sessions": {
+    "s_3fc0ba08ec836b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cfe6-0657-7c83-8593-217ed33b9752",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
