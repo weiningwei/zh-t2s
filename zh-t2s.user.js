@@ -414,13 +414,9 @@
     attrOriginal = new WeakMap();
   }
 
-  /** 缓存元素是否有 .ignore-opencc 祖先，避免重复 closest() DOM 爬升 */
-  const ignoreCache = new WeakMap();
+  /** 实时检查忽略区域，兼容类名变更与节点移动。 */
   function hasIgnoreAncestor(el) {
-    if (ignoreCache.has(el)) return ignoreCache.get(el);
-    const result = !!el.closest('.ignore-opencc');
-    ignoreCache.set(el, result);
-    return result;
+    return !!el.closest('.ignore-opencc');
   }
 
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
@@ -533,7 +529,7 @@
     if (t === Node.ELEMENT_NODE && SKIP_TAGS.has(root.nodeName)) return; // 整棵子树跳过
 
     // 1) Text 节点：TreeWalker 仅遍历文本，跳过 SKIP_TAGS 子树
-    //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText + ignoreCache
+    //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, TEXT_FILTER);
     while (walker.nextNode()) queue.add(walker.currentNode);
 

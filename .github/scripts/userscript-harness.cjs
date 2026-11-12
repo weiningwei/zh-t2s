@@ -30,6 +30,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
       this.attributes = new Map();
       this.listeners = new Map();
       this.children = [];
+      this.parentElement = null;
+      this.className = '';
       this.value = this.textContent = '';
       this.isConnected = true;
     }
@@ -42,7 +44,21 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
       return Promise.all((this.listeners.get(name) || []).map(fn => fn(event)));
     }
     click() { return this.fire('click'); }
-    appendChild(child) { this.children.push(child); return child; }
+    appendChild(child) {
+      if (child.parentElement) {
+        child.parentElement.children = child.parentElement.children.filter(node => node !== child);
+      }
+      this.children.push(child);
+      child.parentElement = this;
+      return child;
+    }
+    closest(selector) {
+      assert.equal(selector, '.ignore-opencc');
+      for (let el = this; el; el = el.parentElement) {
+        if (el.className.split(/\s+/).includes('ignore-opencc')) return el;
+      }
+      return null;
+    }
     remove() { this.isConnected = false; }
     setAttribute(name, value) { this.attributes.set(name, value); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
@@ -119,13 +135,13 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = 
     globalThis.api = {
       validateDictionary, buildDictionaryTries, applyDictionary, splitDictionaryLine,
       saveDictionary, mayConvertText, safeConvert, openDictionaryEditor,
-      setState, toggleWhitelist, effectiveState,
+      setState, toggleWhitelist, effectiveState, shouldSkipText,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });
 
   return {
-    api: sandbox.api, storage, timers, downloads, observations,
+    api: sandbox.api, storage, timers, downloads, observations, document,
     failWrites(error) { writeError = error; },
     get scans() { return scans; },
     openEditor() {

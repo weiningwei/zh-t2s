@@ -24,6 +24,23 @@ test('state changes keep whitelisted pages inactive until removed from whitelist
   assert.equal(harness.observations.length, 1);
 });
 
+test('ignore rules follow class changes and moves into and out of ignored ancestors', () => {
+  const { api, document } = loadUserscript();
+  const parent = document.createElement('div');
+  const text = { parentElement: parent };
+  assert.equal(api.shouldSkipText(text), false);
+  parent.className = 'ignore-opencc';
+  assert.equal(api.shouldSkipText(text), true);
+  parent.className = '';
+  assert.equal(api.shouldSkipText(text), false);
+  const ignored = document.createElement('section');
+  ignored.className = 'ignore-opencc';
+  ignored.appendChild(parent);
+  assert.equal(api.shouldSkipText(text), true);
+  document.documentElement.appendChild(parent);
+  assert.equal(api.shouldSkipText(text), false);
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
