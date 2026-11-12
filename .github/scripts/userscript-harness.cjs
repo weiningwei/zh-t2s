@@ -191,7 +191,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   assert.equal(source.split(marker).length, 2, 'IIFE 结构改变，请更新测试入口。');
   runInNewContext(source.replace(marker, `
     globalThis.api = {
-      validateDictionary, buildDictionaryTries, applyDictionary, splitDictionaryLine,
+      manageSitePreference, convertSelectedText, setPagePaused, saveSiteDictionary, saveIgnoreRules, syncPageSettings,
+      validateIgnoreRules, validateDictionary, buildDictionaryTries, applyDictionary, splitDictionaryLine,
       saveDictionary, mayConvertText, safeConvert, openDictionaryEditor,
       setState, setSitePreference, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
       setPageState, setTraditionalStyle, syncSitePreferenceFromStorage, start,

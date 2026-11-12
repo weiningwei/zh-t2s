@@ -563,3 +563,67 @@ for (const action of ['save', 'export', 'import']) {
     assert.equal(editor.get('.status').textContent, status);
   });
 }
+
+
+test('website manager releases legacy exclusions without changing other hosts', () => {
+  const h = loadUserscript({ whitelist: ['example.test', 'other.test'] });
+  h.api.manageSitePreference('example.test', 'follow');
+  assert.equal(h.api.effectiveState(), 't2s');
+  assert.equal(h.storage.get('zh-t2s-site-preferences')['other.test'], 'off');
+});
+
+test('temporary page pause never persists or broadcasts and resumes latest direction', () => {
+  const h = loadUserscript();
+  h.api.setPagePaused(true);
+  assert.equal(h.api.effectiveState(), 'off');
+  assert.equal(h.storage.get('zh-t2s-enabled'), 't2s');
+  assert.equal(h.broadcasts.length, 0);
+  h.storage.set('zh-t2s-enabled', 's2t');
+  h.api.syncPageSettings();
+  assert.equal(h.api.effectiveState(), 'off');
+  h.api.setPagePaused(false);
+  assert.equal(h.api.effectiveState(), 's2t');
+});
+
+test('site dictionary overrides identical global sources and survives failed saves', () => {
+  const h = loadUserscript({ dictionary: { t2s: [['繁體', 'global'], ['其他', 'other']], s2t: [] } });
+  h.api.saveSiteDictionary({ t2s: [['繁體', 'local']], s2t: [] });
+  assert.equal(h.api.safeConvert('繁體其他'), 'localother');
+  assert.equal(h.api.convertSelectedText('繁體其他', 't2s'), 'localother');
+  h.failWrites(new Error('disk'));
+  assert.throws(() => h.api.saveSiteDictionary({ t2s: [['繁體', 'bad']], s2t: [] }), /disk/);
+  assert.equal(h.api.safeConvert('繁體'), 'local');
+  assert.throws(() => h.api.convertSelectedText('字'.repeat(20001), 't2s'), /20000/);
+});
+
+test('ignore rules reject complex selectors and restore queued converted text', () => {
+  const h = loadUserscript({ dictionary: { t2s: [['繁體', 'ASCII']], s2t: [] } });
+  const parent = h.document.createElement('div');
+  const text = h.document.createTextNode('繁體');
+  parent.appendChild(text); h.document.documentElement.appendChild(parent);
+  h.api.enqueueSubtree(parent); h.api.processQueue();
+  assert.equal(text.nodeValue, 'ASCII');
+  h.api.saveIgnoreRules(['.quote']);
+  h.api.processQueue();
+  parent.setAttribute('class', 'quote');
+  h.api.enqueueSubtree(parent); h.api.processQueue();
+  assert.equal(text.nodeValue, '繁體');
+  parent.setAttribute('class', '');
+  h.api.enqueueSubtree(parent); h.api.processQueue();
+  assert.equal(text.nodeValue, 'ASCII');
+  assert.throws(() => h.api.validateIgnoreRules(['div > p']), /每行/);
+});
+
+test('foreground sync merges settings once and unchanged settings do not scan', () => {
+  const h = loadUserscript();
+  const before = h.scans;
+  h.api.syncPageSettings();
+  assert.equal(h.scans, before);
+  h.storage.set('zh-t2s-enabled', 's2t');
+  h.storage.set('zh-t2s-traditional-style', 'hk');
+  h.storage.set('zh-t2s-site-dictionaries', { 'example.test': { t2s: [], s2t: [['测试', 'test']] } });
+  h.api.syncPageSettings();
+  assert.equal(h.api.safeConvert('测试'), 'test');
+  assert.equal(h.scans - before, 2); // 一次还原 + 一次收集
+  assert.equal(h.broadcasts.length, 0);
+});

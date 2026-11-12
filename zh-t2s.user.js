@@ -564,10 +564,10 @@
       <textarea data-rules aria-label="忽略规则"></textarea>
       <div class="actions"><button data-save>保存并应用</button><button data-close>取消</button></div>`);
     const field = root.querySelector('[data-rules]');
+    root.querySelector('[data-close]').addEventListener('click', close);
     let original;
     try { original = readIgnoreRules(); field.value = original.join('\n'); }
     catch (e) { setStatus(e.message, true); return; }
-    root.querySelector('[data-close]').addEventListener('click', close);
     root.querySelector('[data-save]').addEventListener('click', () => {
       try {
         if (JSON.stringify(readIgnoreRules()) !== JSON.stringify(original) && !window.confirm('忽略规则已在其他页面更新，覆盖吗？')) return;
@@ -1466,7 +1466,11 @@
             try { manageSitePreference(host, value); render(); setStatus('已保存：' + host); }
             catch (e) { setStatus('保存失败：' + e.message, true); }
           }, 'managed-site');
-          list.appendChild(row);
+          const label = document.createElement('label');
+          const caption = document.createElement('div');
+          caption.textContent = host;
+          label.appendChild(caption); label.appendChild(row);
+          list.appendChild(label);
         }
         setStatus('匹配 ' + rows.length + ' 个网站，最多显示 100 项，请搜索缩小范围。');
       } catch (e) { setStatus(e.message, true); }
