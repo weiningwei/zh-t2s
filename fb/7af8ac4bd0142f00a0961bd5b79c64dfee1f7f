@@ -1,0 +1,31 @@
+.github/scripts/userscript-harness.cjs
+  s_f9ff45d9a7a1e4::t_c95ee3a4348602 24-26,30,113,168-171,173-175,186-187,199,206,209-210,219-220,224
+  s_f9ff45d9a7a1e4::t_4e9f8c7c001c4d 221-223
+CHANGELOG.md
+  s_f9ff45d9a7a1e4::t_a8272f88eded36 9-10
+  s_f9ff45d9a7a1e4::t_6491276e8bac94 11-12
+README.md
+  s_f9ff45d9a7a1e4::t_a8272f88eded36 134-137
+  s_f9ff45d9a7a1e4::t_d9cab01cc49871 138-141
+.github/scripts/userscript.test.cjs
+  s_f9ff45d9a7a1e4::t_2cecdd020b96b7 12-154
+zh-t2s.user.js
+  s_f9ff45d9a7a1e4::t_e2708bf14fdaeb 943,1244-1401,1403-1408,1410-1414,1416-1420,1422-1445,1762
+  s_f9ff45d9a7a1e4::t_67d74de06a9285 1402,1409,1415,1421
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb7af8ac4bd0142f00a0961bd5b79c64dfee1f7f",
+  "prompts": {},
+  "sessions": {
+    "s_f9ff45d9a7a1e4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d04d-a1b0-7733-8a0f-ac35468cb756",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
