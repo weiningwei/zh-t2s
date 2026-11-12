@@ -6,14 +6,21 @@
 
 `zh-t2s.user.js` 是唯一用户脚本源码，使用 IIFE，无构建步骤或包管理。直接修改后保存，在 Tampermonkey 中安装／重装，使用中文网页手动验证。
 
-GitHub Actions 在 push、PR 和手动触发时运行轻量 CI：检查 JavaScript 语法、必要元数据，以及脚本 `@version`、README 版本徽章和 CHANGELOG 最新发布版本的一致性。允许保留 `Unreleased` 开发记录，不要求每次修改都升级版本。CI 不执行用户脚本，不请求 OpenCC CDN，也不验证浏览器交互。
+GitHub Actions 在 push、PR 和手动触发时运行轻量 CI：检查 JavaScript 语法、必要元数据，以及脚本 `@version`、README 版本徽章和 CHANGELOG 最新发布版本的一致性。允许保留 `Unreleased` 开发记录，不要求每次修改都升级版本。
+
+CI 同时运行 Node 内置测试，覆盖词典分隔符、JSON 导入／编辑／保存／导出往返、最长匹配与方向隔离、Unicode／ASCII 预检、保存失败保护、输入法合成与反馈定时器。测试在 VM 中加载完整用户脚本，仅注入测试用函数引用，使用最小的 DOM／GM 存储／定时器模拟；OpenCC 使用恒等转换器替身，不请求 CDN。这些检查不验证 OpenCC 字形字典、真实浏览器排版、事件冒泡或 Tampermonkey 兼容性，仍需手动验证。
+
+版本防回退检查允许版本不变或按 major／minor／patch 升级。push 与推送前的提交比较，PR 与目标分支提交比较；工作流获取完整历史以读取基准脚本。首次推送新分支、手动运行和本地未指定基准时跳过该项，其余检查照常执行。基准存在却无法读取时会失败，不静默跳过。
 
 本地安装 Node.js 24 后可执行同样的检查，无需安装依赖：
 
 ```sh
 node --check zh-t2s.user.js
 node .github/scripts/check-userscript.cjs
+node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.test.cjs
 ```
+
+本地也可将 `BASELINE_SHA` 环境变量设置为基准提交的完整 SHA，执行元数据检查时一并验证版本没有回退。
 
 元数据检查会保护当前全站匹配、`@noframes`、`document-idle`、四项 GM 授权和固定版本的 jsDelivr OpenCC 依赖。若有意修改这些约定，请同步调整 `.github/scripts/check-userscript.cjs`。
 

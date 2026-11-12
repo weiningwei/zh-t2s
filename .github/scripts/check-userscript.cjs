@@ -4,6 +4,8 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
+const { execFileSync } = require('node:child_process');
+const { assertVersionNotOlder } = require('./version-policy.cjs');
 
 const repoRoot = resolve(__dirname, '../..');
 const read = (file) => readFileSync(resolve(repoRoot, file), 'utf8');
@@ -53,5 +55,19 @@ assert.ok(releaseHeadings.length, 'CHANGELOG 缺少发布条目。');
 assert.equal(releaseHeadings[0][1], version, 'CHANGELOG 最新发布版本与 @version 不一致。');
 assert.match(releaseHeadings[0][2], /^ - \d{4}-\d{2}-\d{2}$/,
   'CHANGELOG 最新发布条目必须带 YYYY-MM-DD 日期。');
+
+const baselineSha = process.env.BASELINE_SHA;
+if (baselineSha && !/^0+$/.test(baselineSha)) {
+  assert.match(baselineSha, /^[a-f0-9]{40}$/i, 'BASELINE_SHA 必须为完整提交 SHA。');
+  const baselineSource = execFileSync('git', ['show', baselineSha + ':zh-t2s.user.js'], {
+    cwd: repoRoot, encoding: 'utf8'
+  });
+  const baselineVersion = baselineSource.match(/^\/\/\s+@version[ \t]+(\d+\.\d+\.\d+)[ \t]*\r?$/m);
+  assert.ok(baselineVersion, '基准提交缺少有效 @version。');
+  assertVersionNotOlder(version, baselineVersion[1]);
+  console.log('版本防回退检查通过：' + baselineVersion[1] + ' → ' + version);
+} else {
+  console.log('未提供基准提交（本地、手动运行或首次推送），跳过版本防回退检查。');
+}
 
 console.log('元数据与发布版本检查通过：' + version);
