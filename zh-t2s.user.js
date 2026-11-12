@@ -591,7 +591,9 @@
   function shouldSkipElement(el) {
     for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
       if (SKIP_TAGS.has(ancestor.nodeName)) return true;
-      if (ignoreRules.length && (ignoreTags.has(ancestor.nodeName) || ignoreIds.has(ancestor.getAttribute('id')) ||
+      // 标签规则按大写比较：SVG／MathML 等外来元素的 nodeName 保留原本大小写。
+      if (ignoreRules.length && ((ignoreTags.size && ignoreTags.has(ancestor.nodeName.toUpperCase())) ||
+          ignoreIds.has(ancestor.getAttribute('id')) ||
           (ignoreClasses.size && (ancestor.getAttribute('class') || '').split(/\s+/).some(name => ignoreClasses.has(name))))) return true;
     }
     return hasIgnoreAncestor(el);

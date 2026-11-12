@@ -613,6 +613,22 @@ test('site dictionary overrides identical global sources and survives failed sav
   assert.throws(() => h.api.convertSelectedText('字'.repeat(20001), 't2s'), /20000/);
 });
 
+test('tag ignore rules match foreign elements whose nodeName keeps its case', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  api.saveIgnoreRules(['svg']);
+  const svg = document.createElement('div');
+  svg.nodeName = 'svg'; // SVG／MathML 元素的 nodeName 不改写为大写
+  const text = document.createTextNode('繁體');
+  svg.appendChild(text);
+  document.documentElement.appendChild(svg);
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '繁體');
+  api.saveIgnoreRules([]);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体');
+});
+
 test('ignore rules reject complex selectors and restore queued converted text', () => {
   const h = loadUserscript({ dictionary: { t2s: [['繁體', 'ASCII']], s2t: [] } });
   const parent = h.document.createElement('div');
