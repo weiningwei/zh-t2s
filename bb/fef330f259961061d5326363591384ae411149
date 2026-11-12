@@ -1,0 +1,16 @@
+CHANGELOG.md
+  h_ab7185b88fbcdb 9,11
+README.md
+  h_ab7185b88fbcdb 115,117,119,121,123,125,127,129-133,135,141,143,145,147,149,151,153-155,157,159,161,163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bbfef330f259961061d5326363591384ae411149",
+  "prompts": {},
+  "humans": {
+    "h_ab7185b88fbcdb": {
+      "author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
