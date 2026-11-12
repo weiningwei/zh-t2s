@@ -4,7 +4,7 @@
 // @name:zh-TW   繁簡轉換 (zh-t2s)
 // @name:en      Traditional-Simplified Chinese Converter (zh-t2s)
 // @namespace    https://github.com/weiningwei/zh-t2s
-// @version      2.13.2
+// @version      2.14.0
 // @description       基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-CN 基于 OpenCC 在网页繁简中文之间双向转换，覆盖正文/标题/表单等可见文本，支持动态内容与分批处理；默认繁→简，可通过菜单切换为简→繁。
 // @description:zh-TW 基於 OpenCC 在網頁繁簡中文之間雙向轉換，覆蓋正文/標題/表單等可見文本，支援動態內容與分批處理；預設繁→簡，可透過選單切換為簡→繁。
@@ -26,7 +26,7 @@
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '2.13.2'; // 发布时与 @version 同步，CI 校验一致性
+  const SCRIPT_VERSION = '2.14.0'; // 发布时与 @version 同步，CI 校验一致性
 
   /* ============================================================
    * 1. 依赖检查与转换器初始化
