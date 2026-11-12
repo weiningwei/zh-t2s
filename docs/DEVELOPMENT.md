@@ -6,7 +6,7 @@
 
 `zh-t2s.user.js` 是唯一用户脚本源码，使用 IIFE，无构建步骤或包管理。直接修改后保存，在 Tampermonkey 中安装／重装，使用中文网页手动验证。
 
-GitHub Actions 在 push、PR 和手动触发时运行轻量 CI：检查 JavaScript 语法、必要元数据，以及脚本 `@version`、README 版本徽章和 CHANGELOG 最新发布版本的一致性。允许保留 `Unreleased` 开发记录，不要求每次修改都升级版本。
+GitHub Actions 在 push、PR 和手动触发时运行轻量 CI：检查 JavaScript 语法、必要元数据，以及脚本 `@version`、面板显示版本常量 `SCRIPT_VERSION`、README 版本徽章和 CHANGELOG 最新发布版本的一致性。允许保留 `Unreleased` 开发记录，不要求每次修改都升级版本。
 
 CI 同时运行 Node 内置测试，覆盖词典分隔符、JSON 导入／编辑／保存／导出往返、最长匹配与方向隔离、Unicode／ASCII 预检、保存失败保护、输入法合成与反馈定时器。测试在 VM 中加载完整用户脚本，仅注入测试用函数引用，使用最小的 DOM／GM 存储／定时器模拟；OpenCC 使用恒等转换器替身，不请求 CDN。这些检查不验证 OpenCC 字形字典、真实浏览器排版、事件冒泡或 Tampermonkey 兼容性，仍需手动验证。
 
@@ -81,4 +81,4 @@ const CHUNK_SIZE = 300;    // 每批最多处理节点数
 
 功能／修复代码及相关说明单独提交，变更先记到 CHANGELOG 的 `Unreleased`，不要同时修改发布版本号。
 
-发布时另建 `chore(release): <version>` 提交，按 SemVer 更新脚本 `@version`、README 版本徽章，并将 Unreleased 内容移至带日期的对应版本条目。发布提交不混入功能代码；Greasy Fork 会从主分支拉取更新。
+发布时另建 `chore(release): <version>` 提交，按 SemVer 同步更新脚本 `@version` 与 `SCRIPT_VERSION`、README 版本徽章，并将 Unreleased 内容移至带日期的对应版本条目。发布提交不混入功能代码；Greasy Fork 会从主分支拉取更新。

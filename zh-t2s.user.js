@@ -26,6 +26,8 @@
 (function () {
   'use strict';
 
+  const SCRIPT_VERSION = '2.13.2'; // 发布时与 @version 同步，CI 校验一致性
+
   /* ============================================================
    * 1. 依赖检查与转换器初始化
    * ============================================================
@@ -1025,7 +1027,8 @@
       '.zh-t2s-divider{height:1px;background:#edf0f5;margin:12px 0;}',
       '.zh-t2s-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;}',
       '.zh-t2s-header-main{flex:1;min-width:0;}',
-      '.zh-t2s-header .t{font-weight:650;font-size:15px;color:#1f2329;}',
+      '.zh-t2s-header .t{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-weight:650;font-size:15px;color:#1f2329;}',
+      '.zh-t2s-version{font-size:11px;font-weight:400;color:#6b7280;background:#f0f3f8;border-radius:4px;padding:2px 5px;white-space:nowrap;}',
       '.zh-t2s-header .s{display:flex;align-items:center;gap:6px;color:#596579;margin-top:4px;font-size:12px;}',
       '.zh-t2s-floatpanel .zh-t2s-close{display:block;padding:0 5px;border-radius:6px;font-size:20px;line-height:24px;color:#6b7280;}',
       '.zh-t2s-dot{width:7px;height:7px;border-radius:50%;background:#2fbf6b;flex:none;}',
@@ -1209,6 +1212,11 @@
     const title = document.createElement('div');
     title.className = 't';
     title.textContent = '繁简转换';
+    const version = document.createElement('span');
+    version.className = 'zh-t2s-version';
+    version.textContent = 'v' + SCRIPT_VERSION;
+    version.setAttribute('aria-label', '当前版本 ' + SCRIPT_VERSION);
+    title.appendChild(version);
     const status = document.createElement('div');
     status.className = 's';
     const current = floatBtnStateText();

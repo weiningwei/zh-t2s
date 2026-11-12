@@ -44,6 +44,9 @@ assert.deepEqual([...(fields.get('grant') || [])].sort(), [
 const version = single('version');
 assert.match(version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/,
   '@version 必须使用 major.minor.patch 发布版本。');
+const displayVersion = source.match(/^  const SCRIPT_VERSION = '([\d.]+)';/m);
+assert.ok(displayVersion, '脚本缺少面板版本常量 SCRIPT_VERSION。');
+assert.equal(displayVersion[1], version, '面板显示版本与 @version 不一致。');
 const badge = read('README.md').match(/https:\/\/img\.shields\.io\/badge\/version-([\d.]+)-green/);
 assert.ok(badge, 'README 缺少版本徽章。');
 assert.equal(badge[1], version, 'README 版本徽章与 @version 不一致。');
