@@ -1,0 +1,25 @@
+.github/scripts/check-userscript.cjs
+  s_3fc0ba08ec836b::t_51901ab849a248 1-57
+CHANGELOG.md
+  s_3fc0ba08ec836b::t_51901ab849a248 9-12
+.github/workflows/ci.yml
+  s_3fc0ba08ec836b::t_51901ab849a248 1-27
+docs/DEVELOPMENT.md
+  s_3fc0ba08ec836b::t_51901ab849a248 7,9-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce1f173942c78e88330d2bb53004cfe88d8aeb8e",
+  "prompts": {},
+  "sessions": {
+    "s_3fc0ba08ec836b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cfe6-0657-7c83-8593-217ed33b9752",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
