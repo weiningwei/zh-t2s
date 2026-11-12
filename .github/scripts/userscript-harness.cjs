@@ -9,8 +9,10 @@ const source = readFileSync(resolve(__dirname, '../../zh-t2s.user.js'), 'utf8');
 
 // 仅替换 IIFE 的末尾以取得函数引用；加载整个真实脚本，不复制其功能实现。
 // document 保持 loading，不触发网页扫描的启动入口。
-function loadUserscript({ dictionary = { t2s: [], s2t: [] } } = {}) {
+function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [] } = {}) {
   const storage = new Map([['zh-t2s-dictionary', structuredClone(dictionary)]]);
+  storage.set('zh-t2s-whitelist', structuredClone(whitelist));
+  const observations = [];
   const timers = new Map();
   const dialogs = [];
   const downloads = [];
@@ -94,7 +96,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] } } = {}) {
     console: { warn() {} }, document, location: { hostname: 'example.test' },
     Node: { ELEMENT_NODE: 1, TEXT_NODE: 3, DOCUMENT_NODE: 9, DOCUMENT_FRAGMENT_NODE: 11 },
     NodeFilter: { SHOW_TEXT: 4, SHOW_ELEMENT: 1, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
-    MutationObserver: class { observe() {} disconnect() {} },
+    MutationObserver: class { observe(...args) { observations.push(args); } disconnect() {} },
     GM_getValue: (key, fallback) => storage.has(key) ? structuredClone(storage.get(key)) : fallback,
     GM_setValue: (key, value) => {
       if (writeError) throw writeError;
@@ -117,12 +119,13 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] } } = {}) {
     globalThis.api = {
       validateDictionary, buildDictionaryTries, applyDictionary, splitDictionaryLine,
       saveDictionary, mayConvertText, safeConvert, openDictionaryEditor,
+      setState, toggleWhitelist, effectiveState,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });
 
   return {
-    api: sandbox.api, storage, timers, downloads,
+    api: sandbox.api, storage, timers, downloads, observations,
     failWrites(error) { writeError = error; },
     get scans() { return scans; },
     openEditor() {

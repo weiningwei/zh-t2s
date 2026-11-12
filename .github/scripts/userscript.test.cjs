@@ -9,6 +9,21 @@ const data = (t2s = [], s2t = []) => ({ t2s, s2t });
 const editorSelector = direction => '[data-editor="' + direction + '"]';
 const actionSelector = action => '[data-action="' + action + '"]';
 
+test('state changes keep whitelisted pages inactive until removed from whitelist', () => {
+  const harness = loadUserscript({ whitelist: ['example.test'] });
+  for (const direction of ['s2t', 't2s', 'off', 't2s']) {
+    harness.api.setState(direction);
+    assert.equal(harness.api.effectiveState(), 'off');
+    assert.equal(harness.scans, 0);
+    assert.equal(harness.observations.length, 0);
+  }
+  assert.equal(harness.storage.get('zh-t2s-enabled'), 't2s');
+  harness.api.toggleWhitelist();
+  assert.equal(harness.api.effectiveState(), 't2s');
+  assert.ok(harness.scans > 0);
+  assert.equal(harness.observations.length, 1);
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

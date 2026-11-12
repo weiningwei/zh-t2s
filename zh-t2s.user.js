@@ -733,6 +733,7 @@
 
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
   function applyState(oldState, newState, conversionChanged = false) {
+    if (isWhitelisted || !hasOpenCC) return;
     const wasActive = oldState !== 'off';
     const isActive = newState !== 'off';
     const directionChanged = wasActive && isActive && oldState !== newState;
