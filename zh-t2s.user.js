@@ -230,9 +230,43 @@
     return { tries, nonHanStart };
   }
 
+
+  const SITE_DICTIONARY_KEY = 'zh-t2s-site-dictionaries';
+  let siteDictionary = { t2s: [], s2t: [] };
+  function validateSiteDictionaries(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length > 1000) throw new Error('站点词典格式无效。');
+    const result = Object.create(null);
+    for (const [host, data] of Object.entries(value)) {
+      if (!host || host.length > 253 || !/^[a-z0-9._:\[\]-]+$/i.test(host)) throw new Error('站点词典域名无效。');
+      result[host] = validateDictionary(data);
+    }
+    return result;
+  }
+  function readSiteDictionary() {
+    return validateDictionary(GM_getValue(SITE_DICTIONARY_KEY, {})[location.hostname] || { t2s: [], s2t: [] });
+  }
+  function mergeDictionaries(global, local) {
+    const result = { t2s: [], s2t: [] };
+    for (const direction of ['t2s', 's2t']) result[direction] = [...new Map([...global[direction], ...local[direction]]).entries()];
+    return result;
+  }
+  try { if (typeof GM_getValue === 'function') siteDictionary = readSiteDictionary(); } catch (e) { console.warn('[zh-t2s] 站点词典读取失败。', e); }
+  function saveSiteDictionary(data) {
+    const next = validateDictionary(data);
+    const compiled = buildDictionaryTries(mergeDictionaries(dictionary, next));
+    const all = validateSiteDictionaries(GM_getValue(SITE_DICTIONARY_KEY, {}));
+    all[location.hostname] = next;
+    GM_setValue(SITE_DICTIONARY_KEY, all);
+    siteDictionary = next;
+    dictionaryTries = compiled.tries;
+    dictionaryNonHanStart = compiled.nonHanStart;
+    if (effectiveState() !== 'off') applyState(effectiveState(), effectiveState(), true);
+    refreshMenu();
+  }
+
   /** 构建并切换到新的词典 */
   function compileDictionary(data) {
-    const { tries, nonHanStart } = buildDictionaryTries(data);
+    const { tries, nonHanStart } = buildDictionaryTries(mergeDictionaries(data, siteDictionary));
     dictionaryNonHanStart = nonHanStart;
     return tries;
   }
@@ -269,7 +303,7 @@
 
   function saveDictionary(data) {
     const next = validateDictionary(data);
-    const { tries, nonHanStart } = buildDictionaryTries(next);
+    const { tries, nonHanStart } = buildDictionaryTries(mergeDictionaries(next, siteDictionary));
     // 持久化失败时保留草稿与现有配置，不显示成功。
     if (typeof GM_setValue !== 'function') throw new Error('当前环境不支持保存设置。');
     GM_setValue(DICTIONARY_KEY, next);
@@ -294,7 +328,10 @@
   /** 切回前台或打开词典编辑器时，读取最新词典并按需重扫 */
   function syncDictionaryFromStorage() {
     const next = readStoredDictionary();
-    if (!next || JSON.stringify(next) === JSON.stringify(dictionary)) return;
+    let local;
+    try { local = readSiteDictionary(); } catch (e) { return; }
+    if (!next || (JSON.stringify(next) === JSON.stringify(dictionary) && JSON.stringify(local) === JSON.stringify(siteDictionary))) return;
+    siteDictionary = local;
     dictionary = next;
     dictionaryTries = compileDictionary(next);
     if (effectiveState() !== 'off') applyState(effectiveState(), effectiveState(), true);
@@ -1411,7 +1448,7 @@
     }
     return { format: 'zh-t2s-settings', schemaVersion: 1, settings: {
       state: settings.state, lastDirection: settings.lastDirection, traditionalStyle: settings.traditionalStyle,
-      shortcuts, sitePreferences: sites, dictionary: validateDictionary(settings.dictionary),
+      shortcuts, sitePreferences: sites, dictionary: validateDictionary(settings.dictionary), siteDictionaries: validateSiteDictionaries(settings.siteDictionaries || {}),
       floatButton: { enabled: button.enabled, position: button.position === null ? null : {
         left: button.position.left, top: button.position.top
       } }
@@ -1429,7 +1466,7 @@
         t2s: GM_getValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false }),
         s2t: GM_getValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false })
       },
-      sitePreferences: readSitePreferences(), dictionary: GM_getValue(DICTIONARY_KEY, { t2s: [], s2t: [] }),
+      siteDictionaries: GM_getValue(SITE_DICTIONARY_KEY, {}), sitePreferences: readSitePreferences(), dictionary: GM_getValue(DICTIONARY_KEY, { t2s: [], s2t: [] }),
       floatButton: { enabled: GM_getValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT), position: GM_getValue(FLOAT_BTN_POS, null) }
     } });
   }
@@ -1445,6 +1482,7 @@
       [SHORTCUT_KEY_S2T, settings.shortcuts.s2t, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false }],
       [SITE_PREFERENCES_KEY, settings.sitePreferences, {}], [WHITELIST_KEY, [], []],
       [DICTIONARY_KEY, settings.dictionary, { t2s: [], s2t: [] }],
+      [SITE_DICTIONARY_KEY, settings.siteDictionaries, {}],
       [FLOAT_BTN_KEY, settings.floatButton.enabled, FLOAT_BTN_DEFAULT], [FLOAT_BTN_POS, settings.floatButton.position, null]
     ];
     const previous = entries.map(([key, , fallback]) => GM_getValue(key, fallback));
@@ -1526,7 +1564,8 @@
 
   // 独立模态编辑器：不随 refreshMenu 重绘，草稿只在保存时写入 GM 存储。
   let dictionaryDialog = null;
-  function openDictionaryEditor() {
+  function openDictionaryEditor(scope = 'global') {
+    const editingSite = scope === 'site';
     closeFloatPanel();
     if (dictionaryDialog) { dictionaryDialog.focus(); return; }
     syncDictionaryFromStorage(); // 不依赖 visibilitychange，重新打开即可读取其他页面的修改
@@ -1562,7 +1601,7 @@
       <div class="body">
         <h2>自定义词典</h2>
         <p>每行填写：原词 =&gt; 替换为。分隔符也可用 -&gt;、→、＝＞；从表格复制的两列可直接粘贴，列间制表符会自动识别。手动按 Tab 键会跳到下一个控件。左右相同可保留原词，删除整行即可删除规则。</p>
-        <p class="hint">全站生效，两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
+        <p class="hint">${editingSite ? '仅此网站生效，同原词覆盖全局；清空后继承全局。' : '全站生效，站点同原词可覆盖。'}两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
         <div class="tabs">
           <button type="button" data-direction="t2s" aria-pressed="true">繁→简</button>
           <button type="button" data-direction="s2t" aria-pressed="false">简→繁（台湾／香港共用）</button>
@@ -1613,8 +1652,8 @@
       }
       return validateDictionary(data);
     }
-    fillEditors(dictionary);
-    const initialDraft = JSON.stringify(dictionary);
+    fillEditors(editingSite ? siteDictionary : dictionary);
+    const initialDraft = JSON.stringify(editingSite ? siteDictionary : dictionary);
     function hasChanges() {
       try { return JSON.stringify(readEditors()) !== initialDraft; }
       catch (e) { return true; }
@@ -1642,7 +1681,7 @@
       catch (e) { previewOut.textContent = '规则有误，无法预览。'; showStatus(e.message, true); return; }
       const key = JSON.stringify(draft);
       if (!previewCache.tries || previewCache.key !== key) {
-        previewCache = { key, tries: buildDictionaryTries(draft).tries };
+        previewCache = { key, tries: buildDictionaryTries(editingSite ? mergeDictionaries(dictionary, draft) : mergeDictionaries(draft, siteDictionary)).tries };
       }
       const direction = activeDirection();
       const convertFn = direction === 's2t' ? converterForState('s2t') : converters.t2s;
@@ -1702,10 +1741,11 @@
       clearTimeout(previewTimer);
       try {
         // 打开编辑器后若存储已被其他页面改写，先确认再覆盖，避免静默丢失对方改动
-        const stored = readStoredDictionary();
+        const stored = editingSite ? readSiteDictionary() : readStoredDictionary();
         if (stored && JSON.stringify(stored) !== initialDraft &&
             !window.confirm('词典已在其他页面更新，继续保存会覆盖对方的修改。\n建议先取消并重新打开编辑器查看最新内容。确定覆盖吗？')) return;
-        saveDictionary(readEditors());
+        if (editingSite) saveSiteDictionary(readEditors());
+        else saveDictionary(readEditors());
         dialog.close();
       } catch (e) { showStatus('保存失败：' + e.message, true); }
     });
@@ -1839,6 +1879,7 @@
     renderGlobalPreferenceControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
+    floatPanel.appendChild(floatPanelRow('此网站词典 · ' + (siteDictionary.t2s.length + siteDictionary.s2t.length) + ' 条', () => openDictionaryEditor('site'), { control: 'site-dictionary' }));
     floatPanel.appendChild(floatPanelRow('选中文字转换', openSelectionTool, { control: 'selection' }));
     const footer = document.createElement('div');
     footer.className = 'zh-t2s-footer';
@@ -1918,6 +1959,7 @@
       if (typeof GM_setValue === 'function') {
         GM_setValue(STATE_KEY, 't2s');
         GM_setValue(DICTIONARY_KEY, { t2s: [], s2t: [] });
+        GM_setValue(SITE_DICTIONARY_KEY, {});
         GM_setValue(TRAD_STYLE_KEY, 'tw');
         GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
         GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
