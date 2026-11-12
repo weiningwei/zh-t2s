@@ -1474,7 +1474,7 @@
         for (const [host, mode] of rows.slice(0, 100)) {
           const row = preferenceSelect(host, [['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']], mode, value => {
             try { manageSitePreference(host, value); render(); setStatus('已保存：' + host); }
-            catch (e) { setStatus('保存失败：' + e.message, true); }
+            catch (e) { render(); setStatus('保存失败：' + e.message, true); } // 重绘回存储中的值，避免下拉框停留在未保存的选择
           }, 'managed-site');
           const label = document.createElement('label');
           const caption = document.createElement('div');
