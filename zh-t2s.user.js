@@ -1294,12 +1294,14 @@
     const previewOut = root.querySelector('[data-preview-out]');
     let previewCache = { key: '', tries: null };
     let previewTimer = 0;
+    let isComposing = false;
     function activeDirection() {
       const active = root.querySelector('[data-direction][aria-pressed="true"]');
       return active ? active.dataset.direction : 't2s';
     }
     /** 用当前草稿预览示例文字：不写入存储，也不影响页面转换 */
     function refreshPreview() {
+      if (isComposing) return;
       const sample = previewInput.value;
       if (!sample) { previewOut.textContent = '预览结果会显示在这里'; return; }
       if (!hasOpenCC) { previewOut.textContent = '转换引擎未加载，无法预览。'; return; }
@@ -1319,6 +1321,7 @@
     }
     /** 独立于预览的输入反馈：解析成功显示条数，失败显示首条错误 */
     function refreshValidationFeedback() {
+      if (isComposing) return;
       let draft;
       try { draft = readEditors(); }
       catch (e) { showStatus(e.message, true); return; }
@@ -1330,13 +1333,27 @@
     /** 去抖刷新：合成期间（拼音等）不触发，避免半成品文本闪错误 */
     function scheduleFeedbackRefresh() {
       clearTimeout(previewTimer);
-      previewTimer = setTimeout(() => { refreshValidationFeedback(); refreshPreview(); }, 300);
+      if (isComposing) return;
+      previewTimer = setTimeout(() => {
+        if (isComposing) return;
+        refreshValidationFeedback();
+        refreshPreview();
+      }, 300);
     }
     previewInput.addEventListener('input', (e) => { if (!e.isComposing) refreshPreview(); });
-    previewInput.addEventListener('compositionend', refreshPreview);
     for (const direction of ['t2s', 's2t']) {
       editors[direction].addEventListener('input', (e) => { if (!e.isComposing) scheduleFeedbackRefresh(); });
-      editors[direction].addEventListener('compositionend', scheduleFeedbackRefresh);
+    }
+    for (const input of [editors.t2s, editors.s2t, previewInput]) {
+      input.addEventListener('compositionstart', () => {
+        isComposing = true;
+        clearTimeout(previewTimer);
+      });
+      input.addEventListener('compositionend', () => {
+        isComposing = false;
+        if (input === previewInput) refreshPreview();
+        scheduleFeedbackRefresh();
+      });
     }
     root.querySelectorAll('[data-direction]').forEach((button) => {
       button.addEventListener('click', () => {
