@@ -587,10 +587,18 @@
     return !!el.closest('.ignore-opencc');
   }
 
+  /** 是否属于 SKIP_TAGS：HTML 文档里 HTML 元素的 nodeName 已是大写，SVG／MathML 元素
+   *  与 XHTML 文档保留原大小写。首字符为小写字母（97 = 'a'）时才转大写查表，
+   *  常规 HTML 元素仍只做一次 Set 查询，避免每次扫描为祖先节点生成新字符串。 */
+  function isSkipTag(el) {
+    const name = el.nodeName;
+    return name.charCodeAt(0) < 97 ? SKIP_TAGS.has(name) : SKIP_TAGS.has(name.toUpperCase());
+  }
+
   /** 文本与属性共用的元素边界，包含所有被排除的祖先。 */
   function shouldSkipElement(el) {
     for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
-      if (SKIP_TAGS.has(ancestor.nodeName)) return true;
+      if (isSkipTag(ancestor)) return true;
       // 标签规则按大写比较：SVG／MathML 等外来元素的 nodeName 保留原本大小写。
       if (ignoreRules.length && ((ignoreTags.size && ignoreTags.has(ancestor.nodeName.toUpperCase())) ||
           ignoreIds.has(ancestor.getAttribute('id')) ||
@@ -704,7 +712,7 @@
     const t = root.nodeType;
     if (t === Node.TEXT_NODE) { queue.add(root); return; }
     if (t !== Node.ELEMENT_NODE && t !== Node.DOCUMENT_FRAGMENT_NODE && t !== Node.DOCUMENT_NODE) return;
-    if (!ignoreRules.length && t === Node.ELEMENT_NODE && SKIP_TAGS.has(root.nodeName)) return; // 整棵子树跳过
+    if (!ignoreRules.length && t === Node.ELEMENT_NODE && isSkipTag(root)) return; // 整棵子树跳过
 
     // 1) Text 节点：TreeWalker 仅遍历文本，由过滤器检查完整祖先边界
     //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText
@@ -716,7 +724,7 @@
     try {
       if (t === Node.ELEMENT_NODE && root.matches?.(ATTR_SELECTOR)) queue.add(root);
       root.querySelectorAll?.(ATTR_SELECTOR).forEach((el) => {
-        if (!SKIP_TAGS.has(el.nodeName)) queue.add(el);
+        if (!isSkipTag(el)) queue.add(el);
       });
     } catch (e) { /* querySelectorAll 在某些非标准节点上可能抛错，忽略 */ }
   }
@@ -764,7 +772,7 @@
         else if (!shouldSkipText(node)) convertTextNode(node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         if (ignoreRules.length && shouldSkipElement(node)) restoreAttributes(node);
-        else if (!SKIP_TAGS.has(node.nodeName)) convertAttributes(node);
+        else if (!isSkipTag(node)) convertAttributes(node);
       }
       processed++;
     }

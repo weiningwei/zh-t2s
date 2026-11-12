@@ -404,6 +404,35 @@ test('full scans preserve nested text and attributes inside excluded tags', () =
   }
 });
 
+test('excluded tags match regardless of nodeName casing', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  // SVG／MathML 元素与 XHTML 文档的 nodeName 保留原大小写；SVG 内的可见文字仍应转换。
+  const style = document.createElement('div');
+  style.nodeName = 'style';
+  style.setAttribute('title', '繁體');
+  const skipped = document.createTextNode('繁體');
+  style.appendChild(skipped);
+  const svgText = document.createElement('div');
+  svgText.nodeName = 'text';
+  const converted = document.createTextNode('繁體');
+  svgText.appendChild(converted);
+  document.documentElement.appendChild(style);
+  document.documentElement.appendChild(svgText);
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(skipped.nodeValue, '繁體');
+  assert.equal(style.getAttribute('title'), '繁體');
+  assert.equal(converted.nodeValue, '简体');
+  // 动态插入的整棵 style 子树也应提前跳过，不进入队列
+  const added = document.createElement('div');
+  added.nodeName = 'style';
+  const addedText = document.createTextNode('繁體');
+  added.appendChild(addedText);
+  api.enqueueSubtree(added);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(addedText.nodeValue, '繁體');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
