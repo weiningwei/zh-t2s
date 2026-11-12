@@ -1,0 +1,36 @@
+.github/scripts/userscript-harness.cjs
+  s_d32fb26406244e::t_babdc90258a477 18
+  s_d32fb26406244e::t_62788eab1c4bfe 12,16-17,23-24,160-163,186-189,195-196
+  s_d32fb26406244e::t_e6a49b39160759 13,28,156,177,199
+.github/scripts/userscript.test.cjs
+  s_d32fb26406244e::t_7ab6d944e4229f 12-25,37-135
+  s_d32fb26406244e::t_e6a49b39160759 136-154
+  s_d32fb26406244e::t_babdc90258a477 26-36
+  s_d32fb26406244e::t_62788eab1c4bfe 164
+docs/DEVELOPMENT.md
+  s_d32fb26406244e::t_02e9106e3be966 27,37,52,55-58
+README.md
+  s_d32fb26406244e::t_02e9106e3be966 20,37-38,42,44,46,54,56-64,70,100
+zh-t2s.user.js
+  s_d32fb26406244e::t_babdc90258a477 393-394,416,418,434,818,1066,1445,1485-1486,1540
+  s_d32fb26406244e::t_02e9106e3be966 52,967,1569
+  s_d32fb26406244e::t_3fedb56cb6db16 91,277,298,366,368-380,382-389,391-392,396-399,402-415,417,419-433,435-444,509,512,675,780,815-816,826,837-838,851-852,862-865,879,884,952,955,982-983,1065,1068,1080,1412-1440,1447-1450,1463,1492,1536-1537,1549,1561-1562
+CHANGELOG.md
+  s_d32fb26406244e::t_02e9106e3be966 9-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d69142b11b5a188da577e09fbbb308153e769f1",
+  "prompts": {},
+  "sessions": {
+    "s_d32fb26406244e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1d02b-ddc5-7cc0-9b92-e853a2de971a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
