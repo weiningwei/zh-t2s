@@ -42,6 +42,12 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 
 `applyDictionary` 由页面转换和词典预览复用。`buildDictionaryTries` 不改动模块状态，预览使用草稿；保存成功后才安装新词典及预检状态。
 
+## 浮动面板
+
+保持扁平布局，依次为当前页状态、此网站偏好、全局默认、自定义词典和底部维护操作。站点设置使用独立卡片强调作用范围；繁体字形只在当前页简→繁时显示，并明确为所有网站共用。
+
+`preferenceSelect` 统一构建原生选择控件，站点与全局分别调用各自的保存入口。`positionFloatPanel` 在内容重绘和窗口 resize 后重新定位，选择按钮上方或下方更大的空间，限制最大高度并允许滚动。关闭面板时移除窗口与键盘监听。设置重绘通过 `data-control` 还原焦点并保留滚动位置；Esc 关闭后将焦点返回原生浮动按钮。
+
 ## 存储与同步
 
 | 设置 | GM 存储键 | 已打开页面的同步方式 |

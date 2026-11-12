@@ -991,38 +991,53 @@
     if (document.getElementById('zh-t2s-float-style')) return;
     const css = [
       '.zh-t2s-floatbtn{position:fixed;z-index:2147483646;display:flex;align-items:center;gap:6px;',
-      'padding:7px 13px 7px 8px;border-radius:999px;cursor:grab;user-select:none;-webkit-user-select:none;',
+      'margin:0;border:0;padding:7px 13px 7px 8px;border-radius:999px;cursor:grab;user-select:none;-webkit-user-select:none;',
       'touch-action:none;font:12px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
       'color:#fff;background:linear-gradient(135deg,#5b9bff,#2f6bff);box-shadow:0 4px 14px rgba(47,107,255,.38);',
       'transition:transform .12s ease,box-shadow .2s ease,background .2s ease,filter .15s ease;}',
       '.zh-t2s-floatbtn:hover{box-shadow:0 6px 22px rgba(47,107,255,.5);filter:brightness(1.04);}',
       '.zh-t2s-floatbtn:active{transform:scale(.95);cursor:grabbing;}',
+      '.zh-t2s-floatbtn:focus-visible{outline:2px solid #245fda;outline-offset:3px;}',
       '.zh-t2s-floatbtn.off{background:linear-gradient(135deg,#b8c0cc,#8a93a3);box-shadow:0 4px 14px rgba(0,0,0,.2);}',
       '.zh-t2s-badge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;',
       'font-size:11px;font-weight:700;background:rgba(255,255,255,.22);color:#fff;flex:none;}',
-      '.zh-t2s-floatpanel{position:fixed;right:12px;bottom:54px;z-index:2147483646;width:240px;box-sizing:border-box;',
-      'background:#fff;color:#1f2329;border:1px solid rgba(0,0,0,.06);border-radius:14px;',
-      'box-shadow:0 14px 36px rgba(0,0,0,.2);padding:8px;',
-      'font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
-      'animation:zh-t2s-pop .14s ease;}',
-      '@keyframes zh-t2s-pop{from{opacity:0;transform:translateY(8px) scale(.96);}to{opacity:1;transform:none;}}',
-      '.zh-t2s-row{padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .12s ease;}',
-      '.zh-t2s-row:hover{background:#eef3ff;}',
-      '.zh-t2s-row.muted{color:#8a93a3;}',
-      '.zh-t2s-row.danger{color:#e5484d;}',
-      '.zh-t2s-row.danger:hover{background:#fdeced;}',
-      '.zh-t2s-row.primary{background:linear-gradient(135deg,#5b9bff,#2f6bff);color:#fff;font-weight:600;}',
-      '.zh-t2s-row.primary:hover{background:linear-gradient(135deg,#6ba6ff,#3f78ff);}',
-      '.zh-t2s-seg{flex:1;text-align:center;padding:8px 0;cursor:pointer;border-radius:8px;color:#4a5160;',
-      'transition:background .15s ease,color .15s ease;font-size:12px;}',
-      '.zh-t2s-seg:hover{background:#f0f4ff;}',
-      '.zh-t2s-seg.active{background:linear-gradient(135deg,#5b9bff,#2f6bff);color:#fff;font-weight:600;}',
-      '.zh-t2s-divider{height:1px;background:#eef0f3;margin:6px 2px;}',
-      '.zh-t2s-header{padding:4px 4px 10px;border-bottom:1px solid #eef0f3;margin-bottom:8px;}',
-      '.zh-t2s-header .t{font-weight:600;font-size:13px;color:#1f2329;display:flex;align-items:center;gap:6px;}',
-      '.zh-t2s-header .s{font-size:12px;color:#6b7280;margin-top:3px;}',
-      '.zh-t2s-dot{width:8px;height:8px;border-radius:50%;background:#2fbf6b;box-shadow:0 0 0 3px rgba(47,191,107,.18);flex:none;}',
-      '.zh-t2s-dot.off{background:#b8c0cc;box-shadow:none;}'
+      '.zh-t2s-floatpanel{position:fixed;z-index:2147483646;width:280px;max-width:calc(100vw - 16px);box-sizing:border-box;',
+      'background:#fff;color:#1f2329;border:1px solid #e5e9f0;border-radius:16px;',
+      'box-shadow:0 12px 36px rgba(25,40,65,.18);padding:14px;overflow:auto;overscroll-behavior:contain;',
+      'font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
+      'text-align:left;color-scheme:light;animation:zh-t2s-pop .14s ease;}',
+      '.zh-t2s-floatpanel *{box-sizing:border-box;}',
+      '.zh-t2s-floatpanel button,.zh-t2s-floatpanel select{all:unset;box-sizing:border-box;font:inherit;color:inherit;}',
+      '.zh-t2s-floatpanel button{cursor:pointer;}',
+      '.zh-t2s-floatpanel select{display:block;width:100%;padding:9px 10px;border:1px solid #cdd6e3;',
+      'border-radius:8px;background:#fff;appearance:auto;cursor:pointer;line-height:1.4;}',
+      '.zh-t2s-floatpanel button:focus-visible,.zh-t2s-floatpanel select:focus-visible{outline:2px solid #2f6bff;outline-offset:2px;}',
+      '@keyframes zh-t2s-pop{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}',
+      '.zh-t2s-floatpanel .zh-t2s-row{display:block;width:100%;padding:10px;border-radius:8px;}',
+      '.zh-t2s-floatpanel .zh-t2s-row:hover,.zh-t2s-floatpanel .zh-t2s-close:hover{background:#eef3ff;}',
+      '.zh-t2s-footer{display:flex;align-items:center;gap:8px;margin-top:6px;}',
+      '.zh-t2s-floatpanel .zh-t2s-footer .zh-t2s-row{width:auto;padding:6px 2px;font-size:12px;color:#6b7280;}',
+      '.zh-t2s-floatpanel .zh-t2s-footer .danger{color:#b94b50;margin-left:auto;}',
+      '.zh-t2s-segments{display:flex;padding:3px;gap:4px;border-radius:9px;background:#eef2f8;}',
+      '.zh-t2s-floatpanel .zh-t2s-seg{flex:1;text-align:center;padding:6px;border-radius:6px;color:#4a5160;}',
+      '.zh-t2s-floatpanel .zh-t2s-seg:hover{background:#e1e9f6;}',
+      '.zh-t2s-floatpanel .zh-t2s-seg.active{background:#fff;color:#245fda;box-shadow:0 1px 4px #182e511a;font-weight:600;}',
+      '.zh-t2s-divider{height:1px;background:#edf0f5;margin:12px 0;}',
+      '.zh-t2s-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;}',
+      '.zh-t2s-header-main{flex:1;min-width:0;}',
+      '.zh-t2s-header .t{font-weight:650;font-size:15px;color:#1f2329;}',
+      '.zh-t2s-header .s{display:flex;align-items:center;gap:6px;color:#596579;margin-top:4px;font-size:12px;}',
+      '.zh-t2s-floatpanel .zh-t2s-close{display:block;padding:0 5px;border-radius:6px;font-size:20px;line-height:24px;color:#6b7280;}',
+      '.zh-t2s-dot{width:7px;height:7px;border-radius:50%;background:#2fbf6b;flex:none;}',
+      '.zh-t2s-dot.off{background:#a8b0bd;}',
+      '.zh-t2s-site-card{padding:12px;background:#f4f7fc;border:1px solid #e3eaf5;border-radius:11px;}',
+      '.zh-t2s-field{display:block;}',
+      '.zh-t2s-field-title{display:block;font-weight:600;margin-bottom:7px;}',
+      '.zh-t2s-host{display:block;font-size:12px;font-weight:400;color:#6b7280;overflow-wrap:anywhere;margin-top:2px;}',
+      '.zh-t2s-hint{font-size:12px;line-height:1.55;color:#6b7280;margin-top:7px;}',
+      '.zh-t2s-hint.error{color:#b42318;}',
+      '.zh-t2s-style{margin-top:12px;}',
+      '.zh-t2s-style .zh-t2s-field-title{font-size:12px;color:#596579;font-weight:400;}'
     ].join('\n');
     const style = document.createElement('style');
     style.id = 'zh-t2s-float-style';
@@ -1035,7 +1050,11 @@
     if (window.top !== window.self) return; // 仅顶层框架
     injectFloatStyles();
     if (floatBtn) { updateFloatBtn(); return; }
-    floatBtn = document.createElement('div');
+    floatBtn = document.createElement('button');
+    floatBtn.type = 'button';
+    floatBtn.setAttribute('aria-label', '繁简转换设置');
+    floatBtn.setAttribute('aria-expanded', 'false');
+    floatBtn.setAttribute('aria-controls', 'zh-t2s-floatpanel');
     floatBtn.className = 'ignore-opencc zh-t2s-floatbtn';
     if (floatBtnPos) { // 应用已保存的拖动位置
       floatBtn.style.left = floatBtnPos.left;
@@ -1084,13 +1103,24 @@
   function closeFloatPanel() {
     if (!floatPanel) return;
     floatPanelOpen = false;
+    floatBtn?.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', onDocClickCloseFloat, true);
+    document.removeEventListener('keydown', onFloatPanelKeydown, true);
+    window.removeEventListener('resize', positionFloatPanel);
     const panel = floatPanel;
     floatPanel = null;
     panel.style.transition = 'opacity .12s ease, transform .12s ease';
     panel.style.opacity = '0';
     panel.style.transform = 'translateY(8px) scale(.96)';
     setTimeout(() => { if (panel.parentNode) panel.remove(); }, 120);
+  }
+
+  function onFloatPanelKeydown(e) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeFloatPanel();
+    floatBtn?.focus({ preventScroll: true });
   }
 
   function onDocClickCloseFloat(e) {
@@ -1144,14 +1174,14 @@
     }
   }
 
-  function floatPanelRow(label, onClick, opts) {
-    opts = opts || {};
-    const b = document.createElement('div');
-    b.className = 'zh-t2s-row' + (opts.muted ? ' muted' : '') + (opts.danger ? ' danger' : '') + (opts.primary ? ' primary' : '');
-    b.textContent = label;
-    if (opts.primary) b.style.textAlign = 'center';
-    b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-    return b;
+  function floatPanelRow(label, onClick, opts = {}) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'zh-t2s-row' + (opts.danger ? ' danger' : '');
+    if (opts.control) button.setAttribute('data-control', opts.control);
+    button.textContent = label;
+    button.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+    return button;
   }
 
   function floatPanelDivider() {
@@ -1162,29 +1192,45 @@
 
   // 分段控件的一段：active 时高亮蓝色（样式见 .zh-t2s-seg）
   function floatPanelSeg(label, active) {
-    const b = document.createElement('div');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(active));
     b.className = 'zh-t2s-seg' + (active ? ' active' : '');
     b.textContent = label;
     return b;
   }
 
-  // 主视图页眉（不可点击）：标题 + 状态点 + 统计小字
+  // 页眉先显示当前页状态，统计作为次要信息。
   function floatPanelHeader() {
-    const h = document.createElement('div');
-    h.className = 'zh-t2s-header';
-    const s = floatBtnStateText();
-    const t = document.createElement('div');
-    t.className = 't';
+    const header = document.createElement('div');
+    header.className = 'zh-t2s-header';
+    const main = document.createElement('div');
+    main.className = 'zh-t2s-header-main';
+    const title = document.createElement('div');
+    title.className = 't';
+    title.textContent = '繁简转换';
+    const status = document.createElement('div');
+    status.className = 's';
+    const current = floatBtnStateText();
     const dot = document.createElement('span');
-    dot.className = 'zh-t2s-dot' + (s.on ? '' : ' off');
-    t.appendChild(dot);
-    t.appendChild(document.createTextNode('繁简转换　' + s.label));
-    const stat = document.createElement('div');
-    stat.className = 's';
-    stat.textContent = menuCaptionStats().replace('📊 ', ''); // 已转 N 字 / M ms
-    h.appendChild(t);
-    h.appendChild(stat);
-    return h;
+    dot.className = 'zh-t2s-dot' + (current.on ? '' : ' off');
+    status.appendChild(dot);
+    status.appendChild(document.createTextNode(current.label + ' · ' + menuCaptionStats().replace('📊 ', '')));
+    main.appendChild(title);
+    main.appendChild(status);
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'zh-t2s-close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', '关闭设置面板');
+    close.setAttribute('data-control', 'close');
+    close.addEventListener('click', () => {
+      closeFloatPanel();
+      floatBtn?.focus({ preventScroll: true });
+    });
+    header.appendChild(main);
+    header.appendChild(close);
+    return header;
   }
 
   // 独立模态编辑器：不随 refreshMenu 重绘，草稿只在保存时写入 GM 存储。
@@ -1409,113 +1455,147 @@
     dialog.showModal();
   }
 
-  function renderSitePreferenceControl(panel) {
-    const label = document.createElement('label');
-    label.textContent = '此网站（' + currentHost + '）';
-    Object.assign(label.style, { display: 'block', padding: '4px', overflowWrap: 'anywhere' });
+  function preferenceSelect(label, choices, value, onChange, control) {
     const select = document.createElement('select');
-    select.setAttribute('aria-label', '此网站的转换偏好');
-    Object.assign(select.style, {
-      display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '6px',
-      padding: '7px', border: '1px solid #d4dce8', borderRadius: '8px',
-      background: '#fff', color: '#1f2329', font: 'inherit'
-    });
-    for (const [value, text] of [['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']]) {
+    select.setAttribute('aria-label', label);
+    select.setAttribute('data-control', control);
+    for (const [key, text] of choices) {
       const option = document.createElement('option');
-      option.value = value;
+      option.value = key;
       option.textContent = text;
       select.appendChild(option);
     }
-    select.value = sitePreference;
-    select.addEventListener('change', () => setSitePreference(select.value));
-    label.appendChild(select);
+    select.value = value;
+    select.addEventListener('change', () => onChange(select.value));
+    return select;
+  }
+
+  function renderSitePreferenceControl(panel) {
+    const label = document.createElement('label');
+    label.className = 'zh-t2s-field';
+    const title = document.createElement('span');
+    title.className = 'zh-t2s-field-title';
+    title.textContent = '此网站';
+    const host = document.createElement('span');
+    host.className = 'zh-t2s-host';
+    host.textContent = currentHost;
+    title.appendChild(host);
+    label.appendChild(title);
+    label.appendChild(preferenceSelect('此网站的转换偏好', [
+      ['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']
+    ], sitePreference, setSitePreference, 'site'));
     panel.appendChild(label);
     const hint = document.createElement('div');
+    hint.className = 'zh-t2s-hint' + (sitePreferenceError ? ' error' : '');
     hint.textContent = sitePreferenceError || (sitePreference === 'follow'
-      ? '使用全局默认；选择后自动保存。' : '仅对此网站生效，已自动保存。');
-    Object.assign(hint.style, { padding: '4px', fontSize: '12px', color: sitePreferenceError ? '#b42318' : '#6b7280' });
+      ? '当前随全局：' + ({ t2s: '繁→简', s2t: '简→繁', off: '不转换' })[state]
+      : '已保存，仅对此网站生效。');
     hint.setAttribute('role', 'status');
     panel.appendChild(hint);
   }
 
-  // 重绘扁平面板；词典编辑器独立维护草稿。
+  function renderGlobalPreferenceControl(panel) {
+    const label = document.createElement('label');
+    label.className = 'zh-t2s-field';
+    const title = document.createElement('span');
+    title.className = 'zh-t2s-field-title';
+    title.textContent = '全局默认';
+    label.appendChild(title);
+    label.appendChild(preferenceSelect('全局默认转换方式', [
+      ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']
+    ], state, setState, 'global'));
+    panel.appendChild(label);
+    const hint = document.createElement('div');
+    hint.className = 'zh-t2s-hint';
+    hint.textContent = '仅影响选择“跟随全局”的网站。';
+    panel.appendChild(hint);
+  }
+
+  // 保持扁平布局：当前网站优先，全局默认次之，低频操作收在底部。
   function renderFloatPanelContent() {
     if (!floatPanel) return;
+    const focused = floatPanel.contains(document.activeElement)
+      ? document.activeElement?.getAttribute?.('data-control') : null;
+    const scrollTop = floatPanel.scrollTop;
     floatPanel.innerHTML = '';
-    // 页眉 + 全局方向/字形/开关 + 此网站偏好 + 词典 + 重置 + 隐藏
     floatPanel.appendChild(floatPanelHeader());
-    const globalLabel = document.createElement('div');
-    globalLabel.textContent = '全局默认';
-    globalLabel.style.padding = '4px';
-    floatPanel.appendChild(globalLabel);
-    const seg = document.createElement('div');
-    Object.assign(seg.style, {
-      display: 'flex', gap: '4px', borderRadius: '10px',
-      border: '1px solid #e3e7ee', padding: '3px', marginBottom: '6px', background: '#f6f8fb'
-    });
-    const s1 = floatPanelSeg('繁→简', state === 't2s');
-    s1.addEventListener('click', (e) => { e.stopPropagation(); setState('t2s'); });
-    const s2 = floatPanelSeg('简→繁', state === 's2t');
-    s2.addEventListener('click', (e) => { e.stopPropagation(); setState('s2t'); });
-    seg.appendChild(s1);
-    seg.appendChild(s2);
-    floatPanel.appendChild(seg);
+    const site = document.createElement('div');
+    site.className = 'zh-t2s-site-card';
+    renderSitePreferenceControl(site);
+    floatPanel.appendChild(site);
     if (effectiveState() === 's2t') {
-      const styleRow = document.createElement('div');
-      Object.assign(styleRow.style, { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' });
-      const styleLabel = document.createElement('span');
-      styleLabel.textContent = '繁体字形';
-      Object.assign(styleLabel.style, { fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap' });
-      styleRow.appendChild(styleLabel);
-      const styleSeg = document.createElement('div');
-      Object.assign(styleSeg.style, {
-        display: 'flex', flex: '1', gap: '4px', borderRadius: '10px',
-        border: '1px solid #e3e7ee', padding: '3px', background: '#f6f8fb'
-      });
-      const tw = floatPanelSeg('台湾', traditionalStyle === 'tw');
-      tw.addEventListener('click', (e) => { e.stopPropagation(); setTraditionalStyle('tw'); });
-      const hk = floatPanelSeg('香港', traditionalStyle === 'hk');
-      hk.addEventListener('click', (e) => { e.stopPropagation(); setTraditionalStyle('hk'); });
-      styleSeg.appendChild(tw);
-      styleSeg.appendChild(hk);
-      styleRow.appendChild(styleSeg);
-      floatPanel.appendChild(styleRow);
+      const style = document.createElement('div');
+      style.className = 'zh-t2s-style';
+      const title = document.createElement('div');
+      title.className = 'zh-t2s-field-title';
+      title.textContent = '繁体字形（所有网站共用）';
+      const segments = document.createElement('div');
+      segments.className = 'zh-t2s-segments';
+      segments.setAttribute('role', 'group');
+      segments.setAttribute('aria-label', '繁体字形');
+      for (const [value, text] of [['tw', '台湾'], ['hk', '香港']]) {
+        const button = floatPanelSeg(text, traditionalStyle === value);
+        button.setAttribute('data-control', 'style-' + value);
+        button.addEventListener('click', (e) => { e.stopPropagation(); setTraditionalStyle(value); });
+        segments.appendChild(button);
+      }
+      style.appendChild(title);
+      style.appendChild(segments);
+      site.appendChild(style);
     }
-    const toggleLabel = state === 'off'
-      ? '▶ 开启全局转换（' + (lastDirection === 's2t' ? '简→繁' : '繁→简') + '）'
-      : '⏸ 关闭全局转换';
-    floatPanel.appendChild(floatPanelRow(toggleLabel, () => {
-      if (state === 'off') setState(lastDirection);
-      else setState('off');
-    }));
     floatPanel.appendChild(floatPanelDivider());
-    renderSitePreferenceControl(floatPanel);
+    renderGlobalPreferenceControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
-    floatPanel.appendChild(floatPanelRow('📖 自定义词典（' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条）', openDictionaryEditor));
-    floatPanel.appendChild(floatPanelRow('🔄 重置所有设置', () => { resetAllSettings(); }, { danger: true }));
-    floatPanel.appendChild(floatPanelRow('🙈 隐藏此按钮', () => { setFloatBtnEnabled(false); }));
+    floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
+    const footer = document.createElement('div');
+    footer.className = 'zh-t2s-footer';
+    footer.appendChild(floatPanelRow('隐藏浮动按钮', () => setFloatBtnEnabled(false), { control: 'hide' }));
+    footer.appendChild(floatPanelRow('重置所有设置', resetAllSettings, { danger: true, control: 'reset' }));
+    floatPanel.appendChild(footer);
+    floatPanel.scrollTop = scrollTop;
+    if (focused) floatPanel.querySelector?.('[data-control="' + focused + '"]')?.focus({ preventScroll: true });
+    positionFloatPanel();
+  }
+
+  function positionFloatPanel() {
+    if (!floatPanel || !floatBtn) return;
+    const margin = 8;
+    const gap = 8;
+    const rect = floatBtn.getBoundingClientRect();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const above = Math.max(0, rect.top - gap - margin);
+    const below = Math.max(0, height - rect.bottom - gap - margin);
+    // 内容高度变化或窗口缩小时，重新选择可用空间更大的一侧并限制滚动高度。
+    const useAbove = above >= below;
+    const available = Math.max(above, below);
+    floatPanel.style.maxHeight = Math.max(0, Math.min(available, height - margin * 2)) + 'px';
+    floatPanel.style.right = 'auto';
+    floatPanel.style.bottom = 'auto';
+    const panelRect = floatPanel.getBoundingClientRect();
+    floatPanel.style.left = Math.max(margin, Math.min(rect.right - panelRect.width, width - panelRect.width - margin)) + 'px';
+    const targetTop = useAbove ? rect.top - gap - panelRect.height : rect.bottom + gap;
+    floatPanel.style.top = Math.max(margin, Math.min(targetTop, height - panelRect.height - margin)) + 'px';
   }
 
   function openFloatPanel() {
+    if (floatPanelOpen) return;
+    syncSitePreferenceFromStorage();
     floatPanelOpen = true;
     floatPanel = document.createElement('div');
+    floatPanel.id = 'zh-t2s-floatpanel';
     floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
-    // 面板位置随 FAB 动态调整，避免拖到顶部时面板飞出屏幕
-    const fabRect = floatBtn.getBoundingClientRect();
-    const spaceAbove = fabRect.top;
-    const spaceBelow = window.innerHeight - fabRect.bottom;
-    const panelRight = Math.max(4, Math.min(window.innerWidth - fabRect.right + 12, window.innerWidth - 244));
-    floatPanel.style.right = panelRight + 'px';
-    if (spaceAbove > spaceBelow) {
-      floatPanel.style.bottom = (window.innerHeight - fabRect.top + 8) + 'px';
-    } else {
-      floatPanel.style.top = (fabRect.bottom + 8) + 'px';
-      floatPanel.style.bottom = 'auto';
-    }
+    floatPanel.setAttribute('role', 'region');
+    floatPanel.setAttribute('aria-label', '繁简转换设置');
     document.documentElement.appendChild(floatPanel);
     renderFloatPanelContent();
-    // 下一轮事件循环再挂全局点击关闭，避免本次点击立即触发
-    setTimeout(() => document.addEventListener('click', onDocClickCloseFloat, true), 0);
+    floatBtn.setAttribute('aria-expanded', 'true');
+    window.addEventListener('resize', positionFloatPanel);
+    document.addEventListener('keydown', onFloatPanelKeydown, true);
+    // 延后监听，避免打开面板的这次点击将其立即关闭。
+    setTimeout(() => {
+      if (floatPanelOpen) document.addEventListener('click', onDocClickCloseFloat, true);
+    }, 0);
   }
 
   function setFloatBtnEnabled(on) {

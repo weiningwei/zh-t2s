@@ -110,13 +110,33 @@ test('site preference selector exposes four choices and saves immediately', asyn
   const { api, document, storage } = loadUserscript();
   const panel = document.createElement('div');
   api.renderSitePreferenceControl(panel);
-  const select = panel.children[0].children[0];
+  const select = panel.children[0].children.find(child => child.nodeName === 'SELECT');
   assert.deepEqual(select.children.map(option => option.value), ['follow', 't2s', 's2t', 'off']);
   assert.equal(select.value, 'follow');
   select.value = 'off';
   await select.fire('change');
   assert.equal(api.effectiveState(), 'off');
   assert.equal(storage.get('zh-t2s-site-preferences')['example.test'], 'off');
+});
+
+test('global selector changes only the global default and explains its scope', async () => {
+  const { api, document, storage } = loadUserscript({ sitePreferences: { 'example.test': 's2t' } });
+  const panel = document.createElement('div');
+  api.renderGlobalPreferenceControl(panel);
+  const select = panel.children[0].children.find(child => child.nodeName === 'SELECT');
+  assert.equal(select.value, 't2s');
+  select.value = 'off';
+  await select.fire('change');
+  assert.equal(storage.get('zh-t2s-enabled'), 'off');
+  assert.equal(api.effectiveState(), 's2t');
+  assert.match(panel.children[1].textContent, /仅影响.*跟随全局/);
+  const sitePanel = document.createElement('div');
+  api.renderSitePreferenceControl(sitePanel);
+  assert.match(sitePanel.children[1].textContent, /仅对此网站生效/);
+  api.setSitePreference('follow');
+  const following = document.createElement('div');
+  api.renderSitePreferenceControl(following);
+  assert.match(following.children[1].textContent, /当前随全局：不转换/);
 });
 
 test('page shortcuts modify the selected scope while global menus retain global defaults', () => {

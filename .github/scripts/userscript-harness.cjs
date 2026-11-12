@@ -185,7 +185,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       saveDictionary, mayConvertText, safeConvert, openDictionaryEditor,
       setState, setSitePreference, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
       setPageState, setTraditionalStyle, syncSitePreferenceFromStorage, start,
-      renderSitePreferenceControl, resetAllSettings,
+      renderSitePreferenceControl, renderGlobalPreferenceControl, resetAllSettings,
       preference: () => sitePreference,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })
     };
