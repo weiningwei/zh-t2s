@@ -1,0 +1,21 @@
+CHANGELOG.md
+  s_3fc0ba08ec836b::t_4d15aa6df2ee23 15
+zh-t2s.user.js
+  s_3fc0ba08ec836b::t_4d15aa6df2ee23 1297,1304,1324,1336-1341,1346-1356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f282311aef7663a6b2af2b73ee18582d4d96075e",
+  "prompts": {},
+  "sessions": {
+    "s_3fc0ba08ec836b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cfe6-0657-7c83-8593-217ed33b9752",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
