@@ -1,0 +1,19 @@
+.github/scripts/userscript.test.cjs
+  s_3fc0ba08ec836b::t_37412ab817fc95 616-631
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7b6005b2ddb540f0ae771019a771289118361dc1",
+  "prompts": {},
+  "sessions": {
+    "s_3fc0ba08ec836b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1cfe6-0657-7c83-8593-217ed33b9752",
+        "model": "unknown"
+      },
+      "human_author": "weiningwei <weiningwei09@gmail.com>"
+    }
+  }
+}
