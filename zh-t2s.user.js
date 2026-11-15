@@ -1725,12 +1725,13 @@
   function closeFloatPanel() {
     if (!floatPanel) return;
     floatPanelOpen = false;
+    floatPanelBox = null;
     shortcutCapture = null; // 面板关掉后不再抢占键盘
     shortcutError = '';
     floatBtn?.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', onDocClickCloseFloat, true);
     document.removeEventListener('keydown', onFloatPanelKeydown, true);
-    window.removeEventListener('resize', positionFloatPanel);
+    window.removeEventListener('resize', handleFloatPanelResize);
     const panel = floatPanel;
     floatPanel = null;
     if (prefersReducedMotion()) { panel.remove(); return; } // 减少动态效果时直接收起
@@ -2567,6 +2568,8 @@
     positionFloatPanel();
   }
 
+  let floatPanelBox = null; // 打开时定下的外框（top 与最大高度），重绘不再改位置
+
   function positionFloatPanel() {
     if (!floatPanel || !floatBtn) return;
     const margin = 8;
@@ -2576,16 +2579,29 @@
     const height = window.innerHeight;
     const above = Math.max(0, rect.top - gap - margin);
     const below = Math.max(0, height - rect.bottom - gap - margin);
-    // 内容高度变化或窗口缩小时，重新选择可用空间更大的一侧并限制滚动高度。
-    const useAbove = above >= below;
-    const available = Math.max(above, below);
-    floatPanel.style.maxHeight = Math.max(0, Math.min(available, height - margin * 2)) + 'px';
+
+    // 位置只在打开面板（或窗口尺寸变化）时确定一次：固定顶部与最大高度后，
+    // 展开/收起快捷键等内容变化只会在面板内部滚动，不会让整个面板跳动。
+    if (!floatPanelBox) {
+      const useAbove = above >= below;
+      const available = Math.max(160, Math.min(useAbove ? above : below, height - margin * 2));
+      floatPanel.style.maxHeight = available + 'px';
+      const panelHeight = Math.min(floatPanel.getBoundingClientRect().height, available);
+      const top = useAbove ? rect.top - gap - panelHeight : rect.bottom + gap;
+      floatPanelBox = { top: Math.max(margin, top), available };
+    }
+    floatPanel.style.maxHeight = floatPanelBox.available + 'px';
+    floatPanel.style.top = floatPanelBox.top + 'px';
     floatPanel.style.right = 'auto';
     floatPanel.style.bottom = 'auto';
     const panelRect = floatPanel.getBoundingClientRect();
     floatPanel.style.left = Math.max(margin, Math.min(rect.right - panelRect.width, width - panelRect.width - margin)) + 'px';
-    const targetTop = useAbove ? rect.top - gap - panelRect.height : rect.bottom + gap;
-    floatPanel.style.top = Math.max(margin, Math.min(targetTop, height - panelRect.height - margin)) + 'px';
+  }
+
+  /** 窗口尺寸变化时才重新选边并定位 */
+  function handleFloatPanelResize() {
+    floatPanelBox = null;
+    positionFloatPanel();
   }
 
   function openFloatPanel() {
@@ -2594,6 +2610,7 @@
     captureSelection();
     syncSitePreferenceFromStorage();
     floatPanelOpen = true;
+    floatPanelBox = null; // 新面板重新定位一次
     floatPanel = document.createElement('div');
     floatPanel.id = 'zh-t2s-floatpanel';
     floatPanel.className = 'ignore-opencc zh-t2s-floatpanel';
@@ -2602,7 +2619,7 @@
     document.documentElement.appendChild(floatPanel);
     renderFloatPanelContent();
     floatBtn.setAttribute('aria-expanded', 'true');
-    window.addEventListener('resize', positionFloatPanel);
+    window.addEventListener('resize', handleFloatPanelResize);
     document.addEventListener('keydown', onFloatPanelKeydown, true);
     // 延后监听，避免打开面板的这次点击将其立即关闭。
     setTimeout(() => {

@@ -48,7 +48,7 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 
 快捷键区默认展开两个方向的录制行与规则提示，点摘要行可收起；摘要行仅在收起时列出当前组合（`▸ 快捷键 · F8 / F9`），展开时只写“快捷键”避免与下面的行重复；录制状态 `shortcutCapture` 由 `keydown` 捕获阶段独占，面板关闭时清空。低频操作——忽略区域、选中文字转换、站点偏好管理、备份与恢复、隐藏浮动按钮、重置——统一收进 `openMoreTools()` 的二级弹窗，与其它工具共用 `openToolDialog` 容器，不叠加浮层。
 
-`preferenceSelect` 统一构建原生选择控件，站点与全局分别调用各自的保存入口。`positionFloatPanel` 在内容重绘和窗口 resize 后重新定位，选择按钮上方或下方更大的空间，限制最大高度并允许滚动。关闭面板时移除窗口与键盘监听。设置重绘通过 `data-control` 还原焦点并保留滚动位置；Esc 关闭后将焦点返回原生浮动按钮。
+`preferenceSelect` 统一构建原生选择控件，站点与全局分别调用各自的保存入口。`positionFloatPanel` 只在打开面板时定位一次（窗口尺寸变化时重算）：按按钮上方／下方更大的空间选边并固定顶部与最大高度，之后重绘（展开快捷键、切换状态）不再改变位置，超出部分在面板内部滚动。关闭面板时移除窗口与键盘监听。设置重绘通过 `data-control` 还原焦点并保留滚动位置；Esc 关闭后将焦点返回原生浮动按钮。
 
 ## 存储与同步
 
