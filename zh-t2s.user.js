@@ -853,13 +853,10 @@
     scheduled = false;
     const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
     let processed = 0;
-    while (queue.size > 0) {
-      if (processed >= CHUNK_SIZE) { scheduleIdle(); return; }
-      if (hasDeadline && processed > 0 && deadline.timeRemaining() <= 0) { scheduleIdle(); return; }
-
-      // 取一个节点（O(1)）
-      const node = queue.values().next().value;
-      if (node === undefined) break;
+    // 边遍历边删除：Set 迭代器允许删除当前项，不必为每个节点新建一次迭代器
+    for (const node of queue) {
+      if (processed >= CHUNK_SIZE) { scheduleIdle(); break; }
+      if (hasDeadline && processed > 0 && deadline.timeRemaining() <= 0) { scheduleIdle(); break; }
       queue.delete(node);
 
       if (!node.isConnected) continue; // 已脱离文档的节点忽略
