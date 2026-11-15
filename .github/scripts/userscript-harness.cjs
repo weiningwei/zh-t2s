@@ -156,6 +156,14 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       controls.set(selector, new Element());
     }
     const directions = ['t2s', 's2t'].map(dir => controls.get('[data-direction="' + dir + '"]'));
+    // 词典编辑器里的作用范围切换（全局 / 仅此网站）
+    controls.set('[data-scope-hint]', new Element('p'));
+    const scopes = ['global', 'site'].map((scope) => {
+      const button = new Element('button');
+      button.dataset.scope = scope;
+      button.setAttribute('aria-pressed', String(scope === 'global'));
+      return button;
+    });
     root.querySelector = selector => {
       if (selector === '[data-direction][aria-pressed="true"]') {
         return directions.find(button => button.getAttribute('aria-pressed') === 'true');
@@ -165,6 +173,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     };
     root.querySelectorAll = selector => {
       if (selector === '[data-tool]') return []; // 工具行由 innerHTML 生成，桩不模拟
+      if (selector === '[data-scope]') return scopes;
       assert.equal(selector, '[data-direction]');
       return directions;
     };

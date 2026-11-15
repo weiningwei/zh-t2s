@@ -958,7 +958,7 @@ test('the more-tools dialog lists the secondary actions', () => {
   const h = loadUserscript();
   h.api.openMoreTools();
   const root = h.dialogs.at(-1).children[0].shadowRoot;
-  for (const label of ['此网站忽略区域', '此网站词典', '选中文字转换', '站点偏好管理', '设置备份与恢复', '隐藏浮动按钮', '重置所有设置']) {
+  for (const label of ['此网站忽略区域', '选中文字转换', '站点偏好管理', '设置备份与恢复', '隐藏浮动按钮', '重置所有设置']) {
     assert.ok(root.innerHTML.includes(label), '缺少入口：' + label);
   }
 });
@@ -1011,6 +1011,37 @@ test('hiding the float button from more-tools does not reopen the panel', () => 
   h.api.setFloatBtnEnabled(false);
   for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
   assert.equal(h.api.panelOpen(), false, '按钮都隐藏了，不能再把面板撑出来');
+});
+
+test('the dictionary editor switches scope and saves to the selected one', async () => {
+  const h = loadUserscript({ dictionary: data([['全域', '全站']]) });
+  const editor = h.openEditor();
+  const t2sEditor = editor.get('[data-editor="t2s"]');
+  assert.match(t2sEditor.value, /全域 => 全站/, '默认编辑全局词典');
+
+  const siteButton = editor.root.querySelectorAll('[data-scope]').find(button => button.dataset.scope === 'site');
+  await siteButton.click();
+  assert.equal(t2sEditor.value, '', '切到本站后换成站点草稿');
+  assert.equal(siteButton.getAttribute('aria-pressed'), 'true');
+
+  t2sEditor.value = '本站 => 站內';
+  await editor.get(actionSelector('save')).click();
+  assert.deepEqual(plain(h.storage.get('zh-t2s-site-dictionaries')), { 'example.test': { t2s: [['本站', '站內']], s2t: [] } });
+  assert.deepEqual(plain(h.storage.get('zh-t2s-dictionary')), { t2s: [['全域', '全站']], s2t: [] }, '全局词典不受影响');
+});
+
+test('switching dictionary scope with unsaved edits asks first and can be cancelled', async () => {
+  const h = loadUserscript({ dictionary: data([['全域', '全站']]) });
+  const editor = h.openEditor();
+  const t2sEditor = editor.get('[data-editor="t2s"]');
+  t2sEditor.value = '未保存 => 草稿';
+  h.setConfirmation(false);
+
+  const siteButton = editor.root.querySelectorAll('[data-scope]').find(button => button.dataset.scope === 'site');
+  await siteButton.click();
+  assert.equal(t2sEditor.value, '未保存 => 草稿', '取消后仍是原来的草稿');
+  assert.equal(siteButton.getAttribute('aria-pressed'), 'false', '作用范围按钮回到全局');
+  assert.equal(h.confirmations.length, 1);
 });
 
 test('all separators, whitespace and missing separators', () => {

@@ -2171,7 +2171,13 @@
       <div class="body">
         <h2>自定义词典</h2>
         <p>每行填写：原词 =&gt; 替换为。分隔符也可用 -&gt;、→、＝＞；从表格复制的两列可直接粘贴，列间制表符会自动识别。手动按 Tab 键会跳到下一个控件。左右相同可保留原词，删除整行即可删除规则。</p>
-        <p class="hint">${editingSite ? '仅此网站生效，同原词覆盖全局；清空后继承全局。' : '全站生效，站点同原词可覆盖。'}两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
+        <p class="hint">作用范围</p>
+        <div class="tabs" data-scope-tabs>
+          <button type="button" data-scope="global" aria-pressed="true">全局（所有网站）</button>
+          <button type="button" data-scope="site" aria-pressed="false">仅此网站</button>
+        </div>
+        <p class="hint" data-scope-hint></p>
+        <p class="hint">两个方向独立。同位置优先最长词，结果不再转换；不能跨网页文本节点匹配。每方向最多 1000 条。</p>
         <div class="tabs">
           <button type="button" data-direction="t2s" aria-pressed="true">繁→简</button>
           <button type="button" data-direction="s2t" aria-pressed="false">简→繁（台湾／香港共用）</button>
@@ -2218,7 +2224,7 @@
   }
 
   /** 预览与输入反馈：用当前草稿编译一次，输入法合成期间暂停 */
-  function createDictionaryPreview({ root, readDraft, showStatus, editingSite }) {
+  function createDictionaryPreview({ root, readDraft, showStatus, isSite }) {
     const input = root.querySelector('[data-preview-input]');
     const out = root.querySelector('[data-preview-out]');
     let cache = { key: '', tries: null };
@@ -2239,9 +2245,9 @@
       let draft;
       try { draft = readDraft(); }
       catch (e) { out.textContent = '规则有误，无法预览。'; showStatus(e.message, true); return; }
-      const key = JSON.stringify(draft);
+      const key = (isSite() ? 'site:' : 'global:') + JSON.stringify(draft); // 作用范围也算进缓存键
       if (!cache.tries || cache.key !== key) {
-        cache = { key, tries: buildDictionaryTries(editingSite ? mergeDictionaries(dictionary, draft) : mergeDictionaries(draft, siteDictionary)).tries };
+        cache = { key, tries: buildDictionaryTries(isSite() ? mergeDictionaries(dictionary, draft) : mergeDictionaries(draft, siteDictionary)).tries };
       }
       const direction = activeDirection();
       const convertFn = direction === 's2t' ? converterForState('s2t') : converters.t2s;
@@ -2280,8 +2286,8 @@
     };
   }
 
-  function openDictionaryEditor(scope = 'global') {
-    const editingSite = scope === 'site';
+  function openDictionaryEditor(initialScope = 'global') {
+    let editingSite = initialScope === 'site'; // 弹窗内可切换作用范围
     if (floatPanelOpen) restorePanelAfterTools = true; // 从面板进来的，关闭后回到面板
     closeFloatPanel();
     if (dictionaryDialog) { dictionaryDialog.focus(); return; }
@@ -2297,11 +2303,38 @@
     const readDraft = () => readDictionaryDraft(editors);
     const storedDraft = editingSite ? siteDictionary : dictionary;
     fillDictionaryEditors(editors, storedDraft);
-    const initialDraft = JSON.stringify(storedDraft);
+    let initialDraft = JSON.stringify(storedDraft); // 切换作用范围时重算
     const hasChanges = () => { try { return JSON.stringify(readDraft()) !== initialDraft; } catch (e) { return true; } };
     const cancel = () => { if (!hasChanges() || window.confirm('放弃尚未保存的词典修改？')) dialog.close(); };
 
-    const preview = createDictionaryPreview({ root, readDraft, showStatus, editingSite });
+    const scopeHint = root.querySelector('[data-scope-hint]');
+    const scopeButtons = root.querySelectorAll('[data-scope]');
+    function paintScope() {
+      scopeButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', String((button.dataset.scope === 'site') === editingSite));
+      });
+      scopeHint.textContent = editingSite
+        ? '正在编辑此网站专属规则：同原词覆盖全局，清空后继承全局。'
+        : '正在编辑全站规则：任何网站都可用相同原词覆盖。';
+    }
+    /** 切换作用范围：换一份草稿来源，未保存的修改先确认 */
+    function switchDictionaryScope(toSite) {
+      if (toSite === editingSite) return;
+      if (hasChanges() && !window.confirm('切换作用范围会丢弃尚未保存的修改，继续吗？')) { paintScope(); return; }
+      editingSite = toSite;
+      const stored = editingSite ? siteDictionary : dictionary;
+      fillDictionaryEditors(editors, stored);
+      initialDraft = JSON.stringify(stored);
+      paintScope();
+      preview.feedback();
+      preview.refresh();
+    }
+
+    const preview = createDictionaryPreview({ root, readDraft, showStatus, isSite: () => editingSite });
+    paintScope();
+    scopeButtons.forEach((button) => {
+      button.addEventListener('click', () => switchDictionaryScope(button.dataset.scope === 'site'));
+    });
     preview.feedback();
     preview.input.addEventListener('input', (e) => { if (!e.isComposing) preview.refresh(); });
     for (const direction of ['t2s', 's2t']) {
@@ -2426,7 +2459,6 @@
   function openMoreTools() {
     const entries = [
       ['此网站忽略区域', 'ignore', openIgnoreRules],
-      ['此网站词典 · ' + (siteDictionary.t2s.length + siteDictionary.s2t.length) + ' 条', 'site-dictionary', () => openDictionaryEditor('site')],
       ['选中文字转换', 'selection', openSelectionTool],
       ['站点偏好管理', 'sites', openSiteManager],
       ['设置备份与恢复', 'backup', openSettingsBackup]
