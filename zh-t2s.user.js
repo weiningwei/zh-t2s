@@ -1625,6 +1625,8 @@
       '.zh-t2s-hint{font-size:12px;line-height:1.55;color:var(--zh-hint);margin-top:7px;}',
       '.zh-t2s-hint.error{color:var(--zh-danger);}',
       '.zh-t2s-style{margin-top:12px;}',
+      // 展开后的子项：只靠缩进表明它们属于上面那一行，不加引导线，避免视觉噪音
+      '.zh-t2s-subgroup{margin-top:2px;padding-left:12px;}',
       '.zh-t2s-style .zh-t2s-field-title{font-size:12px;color:var(--zh-muted);font-weight:400;}',
       // 深色系统只重写变量值，上面的规则一条都不用改
       '@media (prefers-color-scheme: dark){',
@@ -2443,7 +2445,7 @@
     if (!shortcutSectionOpen) return;
 
     const box = document.createElement('div');
-    box.className = 'zh-t2s-style';
+    box.className = 'zh-t2s-subgroup';
     for (const direction of ['t2s', 's2t']) {
       const name = direction === 't2s' ? '繁→简' : '简→繁';
       const label = shortcutCapture === direction
