@@ -564,10 +564,11 @@
   }
   function readIgnoreRules() { return validateIgnoreRules(GM_getValue(IGNORE_RULES_KEY, {})[location.hostname] || []); }
   try { if (typeof GM_getValue === 'function') installIgnoreRules(readIgnoreRules()); } catch (e) { console.warn('[zh-t2s] 忽略规则读取失败。', e); }
+  /** class 始终观察：.ignore-opencc 可能被页面动态加上或移除，需要据此重扫该子树。
+   *  id 只在配置了 #id 忽略规则时观察，避免无谓回调。 */
   function observerOptions() {
-    if (!ignoreRules.length) return OBSERVER_OPTIONS;
-    return { ...OBSERVER_OPTIONS, attributeOldValue: true, attributeFilter: [...CONVERTIBLE_ATTRS,
-      ...(ignoreClasses.size ? ['class'] : []), ...(ignoreIds.size ? ['id'] : [])] };
+    return { ...OBSERVER_OPTIONS, attributeOldValue: true,
+      attributeFilter: [...CONVERTIBLE_ATTRS, 'class', ...(ignoreIds.size ? ['id'] : [])] };
   }
   function saveIgnoreRules(rules) {
     const next = validateIgnoreRules(rules);
@@ -677,7 +678,8 @@
    *  预检前置：只收集含汉字或可能命中自定义词典的文本节点。 */
   const TEXT_FILTER = Object.freeze({
     acceptNode(node) {
-      if (ignoreRules.length && textOriginal.has(node) && shouldSkipElement(node.parentElement)) return NodeFilter.FILTER_ACCEPT;
+      // 已转换过的节点即使落在排除区域也放行，交给 processQueue 还原原文
+      if (textOriginal.has(node) && node.parentElement && shouldSkipElement(node.parentElement)) return NodeFilter.FILTER_ACCEPT;
       if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
       if (!mayConvertText(node.nodeValue)) return NodeFilter.FILTER_REJECT;
       if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
@@ -859,10 +861,11 @@
 
       if (node.nodeType === Node.TEXT_NODE) {
         // 入队后焦点、类名或父节点可能改变，写入前必须重新检查。
-        if (ignoreRules.length && node.parentElement && shouldSkipElement(node.parentElement)) restoreTextNode(node);
+        // 已转换的节点落进排除区域（含动态添加的 .ignore-opencc）时先还原原文。
+        if (node.parentElement && textOriginal.has(node) && shouldSkipElement(node.parentElement)) restoreTextNode(node);
         else if (!shouldSkipText(node)) convertTextNode(node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
-        if (ignoreRules.length && shouldSkipElement(node)) restoreAttributes(node);
+        if (attrOriginal.has(node) && shouldSkipElement(node, true)) restoreAttributes(node);
         else if (!isSkipTag(node) || allowsOwnAttributes(node)) convertAttributes(node);
       }
       processed++;
@@ -923,10 +926,17 @@
         }
       } else if (m.type === 'attributes') {
         if (m.attributeName === 'class' || m.attributeName === 'id') {
-          const values = m.attributeName === 'class' ? ignoreClasses : ignoreIds;
-          const matches = value => m.attributeName === 'class'
-            ? (value || '').split(/\s+/).some(name => values.has(name)) : values.has(value);
-          if (matches(m.oldValue) !== matches(m.target.getAttribute(m.attributeName))) enqueueSubtree(m.target);
+          const now = m.target.getAttribute(m.attributeName) || '';
+          const before = m.oldValue || '';
+          if (m.attributeName === 'class') {
+            // .ignore-opencc 变化时重扫：新标记的区域还原原文，移除标记的区域重新转换
+            if (before.includes('ignore-opencc') !== now.includes('ignore-opencc')) { enqueueSubtree(m.target); continue; }
+            if (!ignoreClasses.size) continue;
+            if (before.split(/\s+/).some((name) => ignoreClasses.has(name)) !==
+                now.split(/\s+/).some((name) => ignoreClasses.has(name))) enqueueSubtree(m.target);
+            continue;
+          }
+          if (ignoreIds.size && ignoreIds.has(before) !== ignoreIds.has(now)) enqueueSubtree(m.target);
           continue;
         }
         if (m.target && m.target.nodeType === Node.ELEMENT_NODE) {

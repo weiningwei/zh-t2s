@@ -561,6 +561,34 @@ test('tooltip and aria text attributes convert alongside the older display attri
   }
 });
 
+test('adding .ignore-opencc to a converted region restores its text and attributes', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const region = document.createElement('div');
+  const text = document.createTextNode('繁體文案');
+  region.appendChild(text);
+  region.setAttribute('title', '繁體標題');
+  document.documentElement.appendChild(region);
+
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体文案');
+  assert.equal(region.getAttribute('title'), '简体標題');
+
+  region.className = 'ignore-opencc'; // 页面动态把该区域标记为忽略
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '繁體文案');
+  assert.equal(region.getAttribute('title'), '繁體標題');
+});
+
+test('the observer watches class changes so dynamic ignore regions are rescanned', () => {
+  const h = loadUserscript();
+  h.api.start();
+  const [, options] = h.observations[0];
+  assert.ok(options.attributeFilter.includes('class'));
+  assert.equal(options.attributeOldValue, true);
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
