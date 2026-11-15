@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-11-15
+
 ### 修复
 
 - 使用 shadow DOM 的组件（如 B 站新版评论区）里的文字和属性不转换：TreeWalker、querySelectorAll 和 MutationObserver 都不跨越 shadow 边界，脚本只看得到宿主标签本身。现在扫描时把每个 open shadow root 当作独立的根，递归收集其中的文本、属性与更深层的宿主，单独观察组件内部的后续更新（展开回复、重新渲染），关闭或切换方向时一并还原；宿主所在的排除标签、忽略区域与 .ignore-opencc 同样作用于 shadow 树内的内容，脚本自己的设置面板仍保持原样。closed shadow root 无法访问，只能跳过。
