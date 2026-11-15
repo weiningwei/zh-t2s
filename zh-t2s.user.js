@@ -371,16 +371,36 @@
    * ============================================================ */
   const SHORTCUT_KEY_T2S = 'zh-t2s-shortcut-t2s';
   const SHORTCUT_KEY_S2T = 'zh-t2s-shortcut-s2t';
-  let shortcutT2S = { key: 'F8', ctrl: false, alt: false, shift: false, meta: false };
-  let shortcutS2T = { key: 'F9', ctrl: false, alt: false, shift: false, meta: false };
-  try {
-    if (typeof GM_getValue === 'function') {
-      const s1 = GM_getValue(SHORTCUT_KEY_T2S, null);
-      if (s1 && typeof s1 === 'object' && s1.key) shortcutT2S = s1;
-      const s2 = GM_getValue(SHORTCUT_KEY_S2T, null);
-      if (s2 && typeof s2 === 'object' && s2.key) shortcutS2T = s2;
-    }
-  } catch (e) {}
+  const SHORTCUT_STORAGE = { t2s: SHORTCUT_KEY_T2S, s2t: SHORTCUT_KEY_S2T };
+  const SHORTCUT_DEFAULT = {
+    t2s: { key: 'F8', ctrl: false, alt: false, shift: false, meta: false },
+    s2t: { key: 'F9', ctrl: false, alt: false, shift: false, meta: false }
+  };
+  let shortcutT2S = { ...SHORTCUT_DEFAULT.t2s };
+  let shortcutS2T = { ...SHORTCUT_DEFAULT.s2t };
+  let shortcutCapture = null; // 正在录制快捷键的方向：'t2s' | 's2t' | null
+  let shortcutError = '';     // 录制失败的原因，显示在面板里
+
+  /** 规范化一份快捷键配置：形状不合法就回退默认值，缺字段补 false。 */
+  function normalizeShortcutConfig(value, fallback) {
+    if (!value || typeof value !== 'object' || typeof value.key !== 'string' || !value.key) return { ...fallback };
+    return { key: value.key, ctrl: !!value.ctrl, alt: !!value.alt, shift: !!value.shift, meta: !!value.meta };
+  }
+
+  function readShortcutConfig(direction) {
+    const fallback = SHORTCUT_DEFAULT[direction];
+    try {
+      if (typeof GM_getValue !== 'function') return { ...fallback };
+      return normalizeShortcutConfig(GM_getValue(SHORTCUT_STORAGE[direction], null), fallback);
+    } catch (e) { return { ...fallback }; }
+  }
+
+  function shortcutFor(direction) { return direction === 't2s' ? shortcutT2S : shortcutS2T; }
+  function setShortcut(direction, value) {
+    if (direction === 't2s') shortcutT2S = value; else shortcutS2T = value;
+  }
+  shortcutT2S = readShortcutConfig('t2s');
+  shortcutS2T = readShortcutConfig('s2t');
 
   // 浮动按钮开关与位置（默认开启/右下角，用户可隐藏或拖动）
   try {
@@ -414,6 +434,56 @@
     if (s.meta) parts.push('Meta');
     parts.push(s.key);
     return parts.join('+');
+  }
+
+  function sameShortcut(a, b) {
+    return !!a && !!b && a.key === b.key && a.ctrl === b.ctrl &&
+      a.alt === b.alt && a.shift === b.shift && a.meta === b.meta;
+  }
+
+  /** 记录按键能否当快捷键：F1–F12 可以单独用，其他按键必须带 Ctrl/Alt/Cmd，
+   *  否则会抢走正常输入（Shift 单独按等于大写输入，不算修饰键）。 */
+  function isUsableShortcut(e) {
+    if (!e.key || e.key === 'Tab' || e.key === 'Escape') return false;
+    if (e.ctrlKey || e.altKey || e.metaKey) return true;
+    return /^F([1-9]|1[0-2])$/.test(e.key);
+  }
+
+  function beginShortcutCapture(direction) {
+    shortcutCapture = direction;
+    shortcutError = '';
+    renderFloatPanelContent();
+  }
+
+  /** 把当前按键存为该方向的快捷键；冲突或保存失败时返回 false 并留下原因。 */
+  function applyShortcut(direction, e) {
+    const next = { key: normalizeKey(e), ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey };
+    const other = direction === 't2s' ? 's2t' : 't2s';
+    if (sameShortcut(next, shortcutFor(other))) {
+      shortcutError = '与另一方向的快捷键相同，请换一个。';
+      return false;
+    }
+    try {
+      if (typeof GM_setValue !== 'function') throw new Error('当前环境不支持保存设置。');
+      GM_setValue(SHORTCUT_STORAGE[direction], next);
+    } catch (err) {
+      shortcutError = '保存失败：' + err.message;
+      return false;
+    }
+    setShortcut(direction, next);
+    shortcutError = '';
+    return true;
+  }
+
+  /** 其他标签页改了快捷键：读回来并刷新菜单与面板 */
+  function syncShortcutsFromStorage() {
+    const nextT2S = readShortcutConfig('t2s');
+    const nextS2T = readShortcutConfig('s2t');
+    if (sameShortcut(nextT2S, shortcutT2S) && sameShortcut(nextS2T, shortcutS2T)) return;
+    shortcutT2S = nextT2S;
+    shortcutS2T = nextS2T;
+    refreshMenu();
+    if (floatPanel) renderFloatPanelContent();
   }
 
   /* ============================================================
@@ -1251,6 +1321,8 @@
         syncSitePreferenceFromStorage();
       } else if (e.data && e.data.type === 'zh-t2s-traditional-style') {
         setTraditionalStyle(e.data.style);
+      } else if (e.data && e.data.type === 'zh-t2s-shortcuts') {
+        syncShortcutsFromStorage();
       }
     });
   }
@@ -1260,6 +1332,7 @@
   function syncPageSettings() {
     if (typeof GM_getValue !== 'function') return;
     try {
+      syncShortcutsFromStorage(); // 快捷键全站共享，其他网站的标签页切回来时也要跟上
       const saved = GM_getValue(STATE_KEY, 't2s');
       const nextState = saved === '0' ? 'off' : saved === '1' ? 't2s' : saved;
       const nextStyle = GM_getValue(TRAD_STYLE_KEY, 'tw');
@@ -1370,6 +1443,25 @@
    * 表单聚焦时（input/textarea/contenteditable）不响应。
    * ============================================================ */
   document.addEventListener('keydown', (e) => {
+    // 录制快捷键期间独占键盘：按键只用于记录，不触发页面或脚本自身
+    if (shortcutCapture) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') { shortcutCapture = null; shortcutError = ''; renderFloatPanelContent(); return; }
+      if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return; // 只按了修饰键，继续等
+      if (!isUsableShortcut(e)) {
+        shortcutError = '请用 F1–F12，或带 Ctrl／Alt／Cmd 的组合键。';
+        renderFloatPanelContent();
+        return;
+      }
+      const direction = shortcutCapture;
+      if (!applyShortcut(direction, e)) { renderFloatPanelContent(); return; }
+      shortcutCapture = null;
+      renderFloatPanelContent();
+      refreshMenu();
+      if (channel) { try { channel.postMessage({ type: 'zh-t2s-shortcuts' }); } catch (err) {} }
+      return;
+    }
     if ((dictionaryDialog && dictionaryDialog.open) || (toolDialog && toolDialog.open)) return;
     const ae = document.activeElement;
     const inForm = ae && (
@@ -1578,6 +1670,8 @@
   function closeFloatPanel() {
     if (!floatPanel) return;
     floatPanelOpen = false;
+    shortcutCapture = null; // 面板关掉后不再抢占键盘
+    shortcutError = '';
     floatBtn?.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', onDocClickCloseFloat, true);
     document.removeEventListener('keydown', onFloatPanelKeydown, true);
@@ -2276,6 +2370,31 @@
     panel.appendChild(hint);
   }
 
+  /** 快捷键录制区：点一行进入录制，下一次按键即保存（Esc 取消）。 */
+  function renderShortcutControl(panel) {
+    const box = document.createElement('div');
+    box.className = 'zh-t2s-style';
+    const title = document.createElement('div');
+    title.className = 'zh-t2s-field-title';
+    title.textContent = '快捷键（所有网站共用）';
+    box.appendChild(title);
+    for (const direction of ['t2s', 's2t']) {
+      const name = direction === 't2s' ? '繁→简' : '简→繁';
+      const label = shortcutCapture === direction
+        ? name + ' · 按下新的快捷键…（Esc 取消）'
+        : name + ' · ' + formatShortcut(shortcutFor(direction));
+      box.appendChild(floatPanelRow(label, () => beginShortcutCapture(direction), { control: 'shortcut-' + direction }));
+    }
+    if (shortcutError) {
+      const hint = document.createElement('div');
+      hint.className = 'zh-t2s-hint error';
+      hint.textContent = shortcutError;
+      hint.setAttribute('role', 'status');
+      box.appendChild(hint);
+    }
+    panel.appendChild(box);
+  }
+
   function renderGlobalPreferenceControl(panel) {
     const label = document.createElement('label');
     label.className = 'zh-t2s-field';
@@ -2328,6 +2447,8 @@
     }
     floatPanel.appendChild(floatPanelDivider());
     renderGlobalPreferenceControl(floatPanel);
+    floatPanel.appendChild(floatPanelDivider());
+    renderShortcutControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
     floatPanel.appendChild(floatPanelRow('此网站忽略区域', openIgnoreRules, { control: 'ignore' }));
@@ -2415,8 +2536,8 @@
         GM_setValue(SITE_DICTIONARY_KEY, {});
         GM_setValue(IGNORE_RULES_KEY, {});
         GM_setValue(TRAD_STYLE_KEY, 'tw');
-        GM_setValue(SHORTCUT_KEY_T2S, { key: 'F8', ctrl: false, alt: false, shift: false, meta: false });
-        GM_setValue(SHORTCUT_KEY_S2T, { key: 'F9', ctrl: false, alt: false, shift: false, meta: false });
+        GM_setValue(SHORTCUT_KEY_T2S, { ...SHORTCUT_DEFAULT.t2s });
+        GM_setValue(SHORTCUT_KEY_S2T, { ...SHORTCUT_DEFAULT.s2t });
         GM_setValue(WHITELIST_KEY, []);
         GM_setValue(SITE_PREFERENCES_KEY, {});
         GM_setValue(FLOAT_BTN_KEY, FLOAT_BTN_DEFAULT);

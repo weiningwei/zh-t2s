@@ -857,6 +857,56 @@ test('the tool dialog follows the dark preference', () => {
   assert.equal(dialog.style.color, '#e6e8ee');
 });
 
+const shortcutEvent = (key, { ctrl = false, alt = false, shift = false, meta = false } = {}) => ({
+  key, ctrlKey: ctrl, altKey: alt, shiftKey: shift, metaKey: meta,
+  preventDefault() {}, stopPropagation() {}
+});
+
+test('recording a shortcut stores it and the new key drives the page', async () => {
+  const h = loadUserscript();
+  h.api.beginShortcutCapture('t2s');
+  assert.equal(h.api.shortcutState(), 't2s');
+
+  await h.document.fire('keydown', shortcutEvent('k', { ctrl: true }));
+  assert.deepEqual(plain(h.storage.get('zh-t2s-shortcut-t2s')),
+    { key: 'K', ctrl: true, alt: false, shift: false, meta: false }, '单字符键名统一大写后保存');
+  assert.equal(h.api.shortcutState(), null, '录制结束后释放键盘');
+  assert.equal(h.api.shortcutConfig().t2s.key, 'K');
+});
+
+test('unusable or duplicate shortcuts are rejected without ending the recording', async () => {
+  const h = loadUserscript();
+  h.api.beginShortcutCapture('t2s');
+
+  await h.document.fire('keydown', shortcutEvent('k'));           // 无修饰键的字母
+  assert.equal(h.api.shortcutConfig().t2s.key, 'F8', '不覆盖原有快捷键');
+  assert.match(h.api.shortcutMessage(), /F1–F12/);
+  assert.equal(h.api.shortcutState(), 't2s', '继续等待有效按键');
+
+  await h.document.fire('keydown', shortcutEvent('F9'));          // 与简→繁冲突
+  assert.equal(h.api.shortcutConfig().t2s.key, 'F8');
+  assert.match(h.api.shortcutMessage(), /另一方向/);
+
+  await h.document.fire('keydown', shortcutEvent('Escape'));      // Esc 取消
+  assert.equal(h.api.shortcutState(), null);
+  assert.equal(h.api.shortcutMessage(), '');
+  assert.equal(h.storage.get('zh-t2s-shortcut-t2s'), undefined, '取消不写存储');
+});
+
+test('the recorded shortcut toggles the page and other tabs pick it up', async () => {
+  const h = loadUserscript();
+  h.api.beginShortcutCapture('t2s');
+  await h.document.fire('keydown', shortcutEvent('k', { ctrl: true }));
+
+  await h.document.fire('keydown', shortcutEvent('k', { ctrl: true }));
+  assert.equal(h.api.effectiveState(), 'off', '新快捷键立即生效');
+
+  const other = loadUserscript();
+  other.storage.set('zh-t2s-shortcut-t2s', { key: 'J', ctrl: true, alt: false, shift: false, meta: false });
+  other.receiveBroadcast({ type: 'zh-t2s-shortcuts' });
+  assert.equal(other.api.shortcutConfig().t2s.key, 'J', '广播后跟上其他标签页的修改');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

@@ -53,7 +53,7 @@ Rules:
 - **Conversion boundaries**: `INPUT` and `TEXTAREA` content and attributes are skipped; other eligible elements use `CONVERTIBLE_ATTRS`.
 - **Silent elements**: one ancestor walk in `shouldSkipElement` (`SKIP_TAGS` set, `.ignore-opencc`, site ignore rules) that hops from a shadow root to its host via `ancestorOf`, so ignored regions cover shadow content too. `inActiveEditable` uses native `Element.isContentEditable` and the active element of `node.getRootNode()`.
 - **Cross-tab sync**: `BroadcastChannel('zh-t2s')` broadcasts state and traditional style changes to same-origin tabs. Dictionary changes use GM storage: read on becoming visible or opening the editor, and check for conflicts before saving. `@noframes` prevents iframe injection.
-- **Shortcuts**: default F8 (t2s), F9 (s2t). Captured at `keydown` capture phase. Saved shortcut preferences are still read, but there is no configuration UI or conflict detection. Suppressed when input/textarea/contenteditable is focused or the dictionary dialog is open.
+- **Shortcuts**: default F8 (t2s), F9 (s2t), stored as `{ key, ctrl, alt, shift, meta }` under `zh-t2s-shortcut-t2s` / `zh-t2s-shortcut-s2t`. The panel records new combos: `beginShortcutCapture` switches the keydown handler into capture mode, `applyShortcut` saves and rejects duplicates plus keys that would steal typing (`isUsableShortcut`: F1–F12 may stand alone, everything else needs Ctrl/Alt/Cmd, and Shift alone does not count), and closing the panel clears the capture. Changes broadcast `zh-t2s-shortcuts` to same-origin tabs and are re-read on visibility change. Suppressed when input/textarea/contenteditable is focused or a dialog is open.
 
 ## Pitfalls to avoid
 
