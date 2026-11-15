@@ -865,10 +865,14 @@
       if (!node.isConnected) continue; // 已脱离文档的节点忽略
 
       if (node.nodeType === Node.TEXT_NODE) {
-        // 入队后焦点、类名或父节点可能改变，写入前必须重新检查。
-        // 已转换的节点落进排除区域（含动态添加的 .ignore-opencc）时先还原原文。
-        if (node.parentElement && textOriginal.has(node) && shouldSkipElement(node.parentElement)) restoreTextNode(node);
-        else if (!shouldSkipText(node)) convertTextNode(node);
+        // 入队后焦点、类名或父节点可能改变，写入前必须重新检查：一次祖先遍历同时
+        // 判定“是否落进排除区域”（已转换的节点要还原）与“是否正在编辑”。
+        const parent = node.parentElement;
+        if (parent && shouldSkipElement(parent)) {
+          if (textOriginal.has(node)) restoreTextNode(node);
+        } else if (!inActiveEditable(node)) {
+          convertTextNode(node);
+        }
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         if (attrOriginal.has(node) && shouldSkipElement(node, true)) restoreAttributes(node);
         else if (!isSkipTag(node) || allowsOwnAttributes(node)) convertAttributes(node);
