@@ -971,8 +971,9 @@
             enqueueSubtree(n);
           } else if (n.nodeType === Node.TEXT_NODE) {
             // 新增的裸文本节点需经过 shouldSkipText 过滤
-            // （例如动态插入到 <script> 内的文本，enqueueSubtree 不会处理它）
-            if (!shouldSkipText(n) || (ignoreRules.length && textOriginal.has(n))) queue.add(n);
+            // （例如动态插入到 <script> 内的文本，enqueueSubtree 不会处理它）；
+            // 已转换过的节点即使被移进忽略区域也要入队，由 processQueue 还原原文
+            if (!shouldSkipText(n) || textOriginal.has(n)) queue.add(n);
           }
         });
       }

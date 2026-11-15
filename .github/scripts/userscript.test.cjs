@@ -625,6 +625,24 @@ test('unrelated mutations schedule no idle work, while new text does', () => {
   assert.equal(text.nodeValue, '简体');
 });
 
+test('converted text moved into an ignored region is restored', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const region = h.document.createElement('div');
+  region.className = 'ignore-opencc';
+  const text = h.document.createTextNode('繁體');
+  h.document.documentElement.appendChild(region);
+  h.document.documentElement.appendChild(text);
+
+  h.api.enqueueSubtree(h.document.documentElement);
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体');
+
+  region.appendChild(text); // 节点被移动进忽略区域，触发新增记录而非类名变化
+  h.emitMutations([{ type: 'childList', addedNodes: [text], target: region }]);
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(text.nodeValue, '繁體');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
