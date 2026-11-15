@@ -1502,6 +1502,7 @@
   let floatBtnBadge = null;   // 按钮内状态徽标 span
   let floatPanel = null;      // 展开面板
   let floatPanelOpen = false;
+  let restorePanelAfterTools = false; // 从面板打开过工具：弹窗链关闭后回到面板
   let dragState = null;       // 拖动过程临时状态
   let dragJustMoved = false;  // 刚发生过拖动，吞掉随后的误触 click
 
@@ -1696,6 +1697,16 @@
     floatBtn.classList.toggle('off', !s.on); // 状态点颜色由 .off 决定
   }
 
+  /** 工具弹窗关闭后：若这条弹窗链是从面板发起的，等链结束再把面板还回去 */
+  function schedulePanelRestore() {
+    setTimeout(() => {
+      if (!restorePanelAfterTools || toolDialog || dictionaryDialog || floatPanelOpen) return;
+      if (!floatBtnEnabled || !floatBtn) return; // 按钮已隐藏或不存在就别硬开面板
+      restorePanelAfterTools = false;
+      openFloatPanel();
+    }, 0);
+  }
+
   function closeFloatPanel() {
     if (!floatPanel) return;
     floatPanelOpen = false;
@@ -1841,6 +1852,7 @@
   // 低频工具共用模态外壳；调用时才创建 DOM，内容必须为代码内静态模板。
   let toolDialog = null;
   function openToolDialog(title, contentHTML) {
+    if (floatPanelOpen) restorePanelAfterTools = true; // 记住"这次是从面板进来的"
     closeFloatPanel();
     if (toolDialog) toolDialog.close();
     const previousFocus = document.activeElement;
@@ -1870,6 +1882,7 @@
       dialog.remove();
       const target = previousFocus?.isConnected ? previousFocus : floatBtn;
       target?.focus({ preventScroll: true });
+      schedulePanelRestore(); // 从面板进来过就还回去；链式打开时这里会自动跳过
     });
     document.documentElement.appendChild(dialog);
     toolDialog = dialog;
@@ -2254,6 +2267,7 @@
 
   function openDictionaryEditor(scope = 'global') {
     const editingSite = scope === 'site';
+    if (floatPanelOpen) restorePanelAfterTools = true; // 从面板进来的，关闭后回到面板
     closeFloatPanel();
     if (dictionaryDialog) { dictionaryDialog.focus(); return; }
     syncDictionaryFromStorage(); // 不依赖 visibilitychange，重新打开即可读取其他页面的修改
@@ -2292,7 +2306,12 @@
     });
     root.querySelector('[data-action="cancel"]').addEventListener('click', cancel);
     dialog.addEventListener('cancel', (e) => { e.preventDefault(); cancel(); });
-    dialog.addEventListener('close', () => { preview.dispose(); dictionaryDialog = null; dialog.remove(); });
+    dialog.addEventListener('close', () => {
+      preview.dispose();
+      dictionaryDialog = null;
+      dialog.remove();
+      schedulePanelRestore();
+    });
 
     root.querySelector('[data-action="save"]').addEventListener('click', () => {
       preview.dispose();
@@ -2398,6 +2417,7 @@
       entries.map(([label, key]) => '<button type="button" data-tool="' + key + '">' + label + '</button>').join('') +
       '<button type="button" class="danger" data-tool="hide">隐藏浮动按钮</button>' +
       '<button type="button" class="danger" data-tool="reset">重置所有设置</button></div>';
+    // 面板的恢复由 openToolDialog 统一处理：从面板进来过，弹窗链结束后回到面板。
     const { root, close } = openToolDialog('更多工具', html);
     const actions = new Map(entries.map(([, key, run]) => [key, run]));
     root.querySelectorAll('[data-tool]').forEach((button) => {
@@ -2523,6 +2543,7 @@
 
   function openFloatPanel() {
     if (floatPanelOpen) return;
+    restorePanelAfterTools = false; // 面板已经打开，之前的「关闭后回到面板」到此为止
     captureSelection();
     syncSitePreferenceFromStorage();
     floatPanelOpen = true;

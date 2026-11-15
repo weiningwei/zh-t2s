@@ -10,12 +10,12 @@ const source = readFileSync(resolve(__dirname, '../../zh-t2s.user.js'), 'utf8');
 // 仅替换 IIFE 的末尾以取得函数引用；加载整个真实脚本，不复制其功能实现。
 // document 保持 loading，不触发网页扫描的启动入口。
 function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
-  sitePreferences = {}, state = 't2s', hostname = 'example.test', hasOpenCC = true } = {}) {
+  sitePreferences = {}, state = 't2s', hostname = 'example.test', hasOpenCC = true, floatButton = false } = {}) {
   const storage = new Map([['zh-t2s-dictionary', structuredClone(dictionary)]]);
   storage.set('zh-t2s-whitelist', structuredClone(whitelist));
   storage.set('zh-t2s-site-preferences', structuredClone(sitePreferences));
   storage.set('zh-t2s-enabled', state);
-  storage.set('zh-t2s-floatbtn', false);
+  storage.set('zh-t2s-floatbtn', floatButton);
   const observations = [];
   const mutationCallbacks = new Set();
   const mediaMatches = new Set();
@@ -91,7 +91,18 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     }
     get classList() {
       const classes = () => this.className.split(/\s+/).filter(Boolean);
-      return { contains: name => classes().includes(name) };
+      return {
+        contains: (name) => classes().includes(name),
+        add(name) { if (!this.contains(name)) this.className = [...classes(), name].join(' '); },
+        remove(name) { this.className = classes().filter((item) => item !== name).join(' '); },
+        toggle(name, force) {
+          const has = this.contains(name);
+          const next = force === undefined ? !has : !!force;
+          if (next && !has) this.add(name);
+          if (!next && has) this.remove(name);
+          return next;
+        }
+      };
     }
     closest(selector) {
       assert.equal(selector, '.ignore-opencc');
@@ -168,6 +179,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     if (tag === 'dialog') dialogs.push(element);
     return element;
   };
+  // 样式表只注入一次的逻辑依赖 getElementById；桩返回 null 即可（重复注入对用例无影响）
+  document.getElementById = () => null;
   document.createTextNode = text => ({ nodeType: 3, nodeValue: text, isConnected: true });
   document.createTreeWalker = (root, show, filter) => {
     scans++;
@@ -222,6 +235,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     // 不测 OpenCC 自身的字形字典；用恒等转换器隔离脚本的自定义规则行为。
     OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined,
     confirm(message) { confirmations.push(message); return confirmation; },
+    addEventListener() {}, removeEventListener() {}, // 面板会在 window 上挂 resize 监听，桩掉即可
     // 媒体查询：默认全部不匹配，用例用 setMedia 打开需要的偏好
     matchMedia(query) { return { matches: mediaMatches.has(query) }; },
     setTimeout: sandbox.setTimeout
@@ -249,10 +263,12 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       setPageState, setTraditionalStyle, syncSitePreferenceFromStorage, start,
       renderSitePreferenceControl, renderGlobalPreferenceControl, resetAllSettings,
       validateSettingsBackup, createSettingsBackup, restoreSettingsBackup, openSettingsBackup, openToolDialog, openMoreTools,
+      openFloatPanel, closeFloatPanel, setFloatBtnEnabled,
       beginShortcutCapture, applyShortcut, syncShortcutsFromStorage,
       shortcutConfig: () => ({ t2s: shortcutT2S, s2t: shortcutS2T }),
       shortcutState: () => shortcutCapture,
       shortcutMessage: () => shortcutError,
+      panelOpen: () => floatPanelOpen,
       preference: () => sitePreference,
       lastPage: () => lastPageDirection,
       snapshot: () => ({ dictionary, dictionaryTries, dictionaryNonHanStart })

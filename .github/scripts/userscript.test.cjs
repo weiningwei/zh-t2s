@@ -931,6 +931,56 @@ test('the more-tools dialog lists the secondary actions', () => {
   }
 });
 
+test('closing the more-tools dialog returns to the panel it came from', () => {
+  const h = loadUserscript({ floatButton: true });
+  h.api.start();
+  h.api.openFloatPanel();
+  assert.equal(h.api.panelOpen(), true);
+
+  h.api.openMoreTools();
+  assert.equal(h.api.panelOpen(), false, '打开弹窗时面板先让位');
+  h.dialogs.at(-1).close();
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(h.api.panelOpen(), true, '关闭子菜单后回到面板');
+});
+
+test('a tool picked inside more-tools returns to the panel once its dialog closes', () => {
+  const h = loadUserscript({ floatButton: true });
+  h.api.start();
+  h.api.openFloatPanel();
+  h.api.openMoreTools();
+  h.api.openSettingsBackup(); // 选中具体工具：替换当前弹窗
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(h.api.panelOpen(), false, '弹窗链未结束时不把面板塞到后面');
+
+  h.dialogs.at(-1).close(); // 关掉最后一个工具弹窗
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(h.api.panelOpen(), true);
+});
+
+test('the dictionary editor also returns to the panel when closed', () => {
+  const h = loadUserscript({ floatButton: true });
+  h.api.start();
+  h.api.openFloatPanel();
+  h.api.openDictionaryEditor();
+  assert.equal(h.api.panelOpen(), false);
+
+  h.dialogs.at(-1).close();
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(h.api.panelOpen(), true);
+});
+
+test('hiding the float button from more-tools does not reopen the panel', () => {
+  const h = loadUserscript({ floatButton: true });
+  h.api.start();
+  h.api.openFloatPanel();
+  h.api.openMoreTools();
+  h.dialogs.at(-1).close();
+  h.api.setFloatBtnEnabled(false);
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(h.api.panelOpen(), false, '按钮都隐藏了，不能再把面板撑出来');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
