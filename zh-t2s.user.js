@@ -358,7 +358,7 @@
 
   // 会话级统计（页面刷新即重置，不持久化）
   // chars: 输出改变的文本/属性原文长度累计（不逐字统计差异）
-  // time:  safeConvert 累计耗时，包含词典匹配与 OpenCC 转换（ms）
+  // time:  按批次累计的队列处理耗时（ms）；不再逐节点取两次 performance.now()
   let stats = { chars: 0, time: 0 };
 
   /* ============================================================
@@ -705,9 +705,7 @@
     if (!text) return;
     if (textState.get(node) === text) return;          // 自己上次写入的值，无外部改动
     textOriginal.set(node, text); // 非自写回值是页面最新原文，供关闭/修改词典时还原
-    const t1 = performance.now();
     const out = safeConvert(text);
-    stats.time += performance.now() - t1;
     if (out !== text) {
       stats.chars += text.length;                      // 累计处理过的字符数（按文本长度计）
       node.nodeValue = out;                             // 写回会触发 characterData 变更
@@ -737,9 +735,7 @@
       if (map.get(attr) === val) continue;              // 自己上次写入的值
       if (!mayConvertText(val)) { map.set(attr, val); origMap.delete(attr); continue; }
       origMap.set(attr, val);                         // 页面最新原文
-      const ta = performance.now();
       const out = safeConvert(val);
-      stats.time += performance.now() - ta;
       if (out !== val) {
         stats.chars += val.length;                     // 累计处理过的字符数（按文本长度计）
         el.setAttribute(attr, out);
@@ -851,6 +847,7 @@
 
   function processQueue(deadline) {
     scheduled = false;
+    const started = performance.now();
     const hasDeadline = deadline && typeof deadline.timeRemaining === 'function';
     let processed = 0;
     // 边遍历边删除：Set 迭代器允许删除当前项，不必为每个节点新建一次迭代器
@@ -879,6 +876,7 @@
     // 队列处理完毕：刷新菜单让统计项显示最新数据
     // 节流 1 秒，避免动态内容持续到来时频繁注销+重注册菜单项
     if (processed > 0) {
+      stats.time += performance.now() - started; // 整批耗时，菜单统计用
       const now = Date.now();
       if (now - lastMenuRefresh >= MENU_REFRESH_INTERVAL) {
         lastMenuRefresh = now;
