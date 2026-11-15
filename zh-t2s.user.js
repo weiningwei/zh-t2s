@@ -582,9 +582,12 @@
     });
   }
 
-  /** 实时检查忽略区域，兼容类名变更与节点移动。 */
-  function hasIgnoreAncestor(el) {
-    return !!el.closest('.ignore-opencc');
+  /** 祖先链的上一层：到 shadow 边界时跳到宿主元素继续向上，
+   *  这样 shadow 树内的内容也能沿用宿主处的排除标签、忽略规则与 .ignore-opencc。 */
+  function ancestorOf(el) {
+    if (el.parentElement) return el.parentElement;
+    const root = typeof el.getRootNode === 'function' ? el.getRootNode() : null;
+    return root && root.host ? root.host : null;
   }
 
   /** 是否属于 SKIP_TAGS：HTML 文档里 HTML 元素的 nodeName 已是大写，SVG／MathML 元素
@@ -595,22 +598,26 @@
     return name.charCodeAt(0) < 97 ? SKIP_TAGS.has(name) : SKIP_TAGS.has(name.toUpperCase());
   }
 
-  /** 文本与属性共用的元素边界，包含所有被排除的祖先。 */
+  /** 文本与属性共用的元素边界，包含所有被排除的祖先（含 shadow 宿主）。 */
   function shouldSkipElement(el) {
-    for (let ancestor = el; ancestor; ancestor = ancestor.parentElement) {
+    for (let ancestor = el; ancestor; ancestor = ancestorOf(ancestor)) {
       if (isSkipTag(ancestor)) return true;
+      // .ignore-opencc 逐个祖先实时判定，兼容类名变更与节点移动；closest 不跨越 shadow 边界
+      if (ancestor.classList && ancestor.classList.contains('ignore-opencc')) return true;
       // 标签规则按大写比较：SVG／MathML 等外来元素的 nodeName 保留原本大小写。
       if (ignoreRules.length && ((ignoreTags.size && ignoreTags.has(ancestor.nodeName.toUpperCase())) ||
           ignoreIds.has(ancestor.getAttribute('id')) ||
           (ignoreClasses.size && (ancestor.getAttribute('class') || '').split(/\s+/).some(name => ignoreClasses.has(name))))) return true;
     }
-    return hasIgnoreAncestor(el);
+    return false;
   }
 
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
   function inActiveEditable(node) {
     const el = node.parentElement;
-    const ae = document.activeElement;
+    // 焦点在 shadow 树内时 document.activeElement 只是宿主元素，取节点所在根的活动元素
+    const root = typeof el?.getRootNode === 'function' ? el.getRootNode() : document;
+    const ae = root.activeElement || document.activeElement;
     // 用原生 isContentEditable 快速判定，再用包含关系覆盖 contenteditable 内的嵌套元素。
     return !!el && !!ae && el.isContentEditable &&
       (el === ae || el.contains(ae) || (ae.isContentEditable && ae.contains(el)));
@@ -649,6 +656,14 @@
       if (!mayConvertText(node.nodeValue)) return NodeFilter.FILTER_REJECT;
       if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  /** 文本与 shadow 宿主共用一次遍历：元素一律接受（只为检查 shadowRoot），
+   *  文本仍由 TEXT_FILTER 过滤；分成两次遍历要多走一遍整棵子树。 */
+  const TRAVERSE_FILTER = Object.freeze({
+    acceptNode(node) {
+      return node.nodeType === Node.ELEMENT_NODE ? NodeFilter.FILTER_ACCEPT : TEXT_FILTER.acceptNode(node);
     }
   });
 
@@ -704,6 +719,7 @@
 
   /** 将 root 子树内所有需要处理的节点入队
    *  - Text 节点：TreeWalker 遍历收集（过滤 SKIP_TAGS 内的文本）
+   *  - shadow 宿主：同一次遍历发现，交给 4.1 展开其 shadow 树
    *  - 属性元素：querySelectorAll 一次性查询（浏览器原生 C++ 实现，远快于 JS 逐元素 hasAttribute）
    *    队列规模大幅缩小，去掉 90%+ 无目标属性的 Element 节点
    */
@@ -714,10 +730,19 @@
     if (t !== Node.ELEMENT_NODE && t !== Node.DOCUMENT_FRAGMENT_NODE && t !== Node.DOCUMENT_NODE) return;
     if (!ignoreRules.length && t === Node.ELEMENT_NODE && isSkipTag(root)) return; // 整棵子树跳过
 
-    // 1) Text 节点：TreeWalker 仅遍历文本，由过滤器检查完整祖先边界
-    //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, TEXT_FILTER);
-    while (walker.nextNode()) queue.add(walker.currentNode);
+    // 1) Text 节点与 shadow 宿主：一次遍历同时收集
+    //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText；TreeWalker 不进入 shadow 树，
+    //   所以宿主在这里发现后交给 registerShadowRoot 单独展开
+    if (t === Node.ELEMENT_NODE && root.shadowRoot) registerShadowRoot(root.shadowRoot);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, TRAVERSE_FILTER);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        if (node.shadowRoot) registerShadowRoot(node.shadowRoot);
+      } else {
+        queue.add(node);
+      }
+    }
 
     // 2) 属性元素：原生选择器一次性查询（包含 root 自身若命中）
     const ATTR_SELECTOR = '[placeholder],[data-placeholder],[title],[alt],[aria-label]';
@@ -727,6 +752,37 @@
         if (!isSkipTag(el)) queue.add(el);
       });
     } catch (e) { /* querySelectorAll 在某些非标准节点上可能抛错，忽略 */ }
+  }
+
+  /* ============================================================
+   * 4.1 Shadow DOM：TreeWalker／querySelectorAll／MutationObserver 都不跨越 shadow 边界
+   * ============================================================
+   * Web Components 把正文放在宿主元素内部的 shadow 树里（B 站新版评论区即如此：
+   * bili-comment-thread-renderer > bili-comment-renderer > bili-rich-text 层层嵌套，
+   * 都使用声明式 shadow root）。文档里的遍历只能看到宿主标签本身，所以这些评论
+   * 既不转换也不会被观察者捕获。这里把每个 open shadow root 当作独立的根处理：
+   *   1) 递归 enqueueSubtree，收集其中的文本、属性与更深层的宿主；
+   *   2) 用一个共用观察者逐个 observe，否则组件内部的后续更新（展开回复、
+   *      重新渲染）不会出现在 document 的观察记录里；
+   *   3) 记入 shadowRoots，关闭或切换方向时随文档一起还原。
+   * 已登记的根不重复展开：它自己的观察者负责后续变更，否则每次全量重扫都要
+   * 多遍历一遍所有 shadow 树。closed shadow root 无法访问，只能跳过。
+   * ============================================================ */
+  const shadowRoots = new Set(); // 已登记的 open shadow root
+  const shadowObserver = new MutationObserver(handleMutations); // 所有 shadow 根共用一个观察者
+
+  function registerShadowRoot(root) {
+    if (!root || shadowRoots.has(root)) return;
+    // 宿主处在排除标签或忽略区域内（含脚本自己的设置面板）：整棵 shadow 树都不登记
+    if (root.host && shouldSkipElement(root.host)) return;
+    shadowRoots.add(root); // 先登记，避免嵌套展开时重复进入
+    shadowObserver.observe(root, observerOptions());
+    enqueueSubtree(root);
+  }
+
+  function releaseShadowRoots() {
+    shadowObserver.disconnect();
+    shadowRoots.clear();
   }
 
   /* ============================================================
@@ -817,9 +873,11 @@
    * - characterData：捕获文本内容的改动
    * - attributes（限定为可转换属性）：捕获 placeholder/title 等改动
    *
-    * 自身写回引发的变更在 observer 回调中被 textState/attrState 预检过滤，不会入队。
-    * ============================================================ */
-  const observer = new MutationObserver((mutations) => {
+   * 观察范围不跨越 shadow 边界，每个登记的 shadow 根由 4.1 的 shadowObserver 单独观察，
+   * 两者共用同一个 handleMutations。
+   * 自身写回引发的变更在回调中被 textState/attrState 预检过滤，不会入队。
+   * ============================================================ */
+  function handleMutations(mutations) {
     for (const m of mutations) {
       if (m.type === 'characterData') {
         if (m.target && m.target.nodeType === Node.TEXT_NODE) {
@@ -855,7 +913,9 @@
       }
     }
     scheduleIdle();
-  });
+  }
+
+  const observer = new MutationObserver(handleMutations);
 
   /* ============================================================
    * 7. 开关控制：关闭时还原原始文本，开启时重新扫描
@@ -897,18 +957,21 @@
     attrOriginal.delete(el);
   }
 
-  /** 关闭转换时遍历整棵 DOM，把曾被转换过的节点还原为原始值 */
-  function restoreAll() {
+  /** 遍历一个根（文档或 shadow 根），把曾被转换过的节点还原为原始值 */
+  function restoreIn(root) {
     // 节点可能在转换后移入排除区域；按写入记录还原，不按当前祖先剪枝。
-    const walker = document.createTreeWalker(
-      document.documentElement,
-      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT
-    );
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
     while (walker.nextNode()) {
       const n = walker.currentNode;
       if (n.nodeType === Node.TEXT_NODE) restoreTextNode(n);
       else if (n.nodeType === Node.ELEMENT_NODE) restoreAttributes(n);
     }
+  }
+
+  /** 关闭转换时遍历整棵 DOM（含已登记的 shadow 根），还原为原始值 */
+  function restoreAll() {
+    restoreIn(document.documentElement);
+    shadowRoots.forEach(restoreIn); // 文档遍历不进入 shadow 树，需逐个补充
   }
 
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
@@ -925,6 +988,7 @@
       scheduled = false;
       restoreAll();
       clearAllState();
+      releaseShadowRoots(); // 先还原再注销，shadow 根要参与还原
     } else if ((directionChanged || conversionChanged) && hasOpenCC) {
       // 方向、繁体字形或词典改变：还原原文，再按新配置重扫
       observer.disconnect();
@@ -932,6 +996,7 @@
       scheduled = false;
       restoreAll();
       clearAllState();
+      releaseShadowRoots(); // 同上；随后的全量重扫会按新配置重新登记
       stats = { chars: 0, time: 0 };                    // 统计清零（还原+重转会让数字失真）
       convert = converterForState(newState);
       observer.observe(document.documentElement, observerOptions());

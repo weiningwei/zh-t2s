@@ -63,6 +63,10 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       child.parentElement = this;
       return child;
     }
+    get classList() {
+      const classes = () => this.className.split(/\s+/).filter(Boolean);
+      return { contains: name => classes().includes(name) };
+    }
     closest(selector) {
       assert.equal(selector, '.ignore-opencc');
       for (let el = this; el; el = el.parentElement) {
@@ -206,6 +210,12 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
 
   return {
     api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations,
+    // 模拟 shadow 根：复用 Element 的子节点与查询能力，nodeType 设为文档片段。
+    createShadowRoot() {
+      const root = new Element();
+      root.nodeType = 11;
+      return root;
+    },
     receiveBroadcast(data) { receiveBroadcast({ data }); },
     failWrites(error) { writeError = error; },
     failReads(error) { readError = error; },

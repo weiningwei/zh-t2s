@@ -433,6 +433,66 @@ test('excluded tags match regardless of nodeName casing', () => {
   assert.equal(addedText.nodeValue, '繁體');
 });
 
+test('open shadow roots convert, observe and restore like document content', () => {
+  const harness = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const { api, document, observations } = harness;
+  // <x-comment> 的 shadow 树里再嵌一层 <x-body>，模拟 B 站评论区的多层组件。
+  const host = document.createElement('x-comment');
+  const outer = harness.createShadowRoot();
+  const body = document.createElement('x-body');
+  const inner = harness.createShadowRoot();
+  const text = document.createTextNode('繁體');
+  const wrapper = document.createElement('div');
+  host.shadowRoot = outer;
+  outer.host = host;
+  body.shadowRoot = inner;
+  inner.host = body;
+  body.setAttribute('title', '繁體');
+  wrapper.appendChild(text);
+  inner.appendChild(wrapper);
+  outer.appendChild(body);
+  document.documentElement.appendChild(host);
+
+  api.enqueueSubtree(document.documentElement);
+  assert.equal(observations.length, 2, '每层 shadow 根各自观察');
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体');
+  assert.equal(body.getAttribute('title'), '简体');
+
+  // 切换方向与关闭都要经 shadow 根还原，重新开启后再转换一次。
+  api.setState('off');
+  assert.equal(text.nodeValue, '繁體');
+  assert.equal(body.getAttribute('title'), '繁體');
+  api.setState('t2s');
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体');
+  assert.equal(observations.length, 5, '重新开启时文档与两层 shadow 根重新观察');
+});
+
+test('ignored regions and script UI stay untouched across the shadow boundary', () => {
+  const harness = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const { api, document, observations } = harness;
+  const ignored = document.createElement('div');
+  ignored.className = 'ignore-opencc';
+  const host = document.createElement('x-panel');
+  const root = harness.createShadowRoot();
+  const inner = document.createElement('div');
+  const text = document.createTextNode('繁體');
+  host.shadowRoot = root;
+  root.host = host;
+  inner.setAttribute('title', '繁體');
+  inner.appendChild(text);
+  root.appendChild(inner);
+  ignored.appendChild(host);
+  document.documentElement.appendChild(ignored);
+
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '繁體', 'shadow 树内的文本沿用宿主的 .ignore-opencc');
+  assert.equal(inner.getAttribute('title'), '繁體');
+  assert.equal(observations.length, 0, '忽略区域内的 shadow 根不登记观察');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
