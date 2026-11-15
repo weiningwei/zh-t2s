@@ -17,6 +17,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   storage.set('zh-t2s-enabled', state);
   storage.set('zh-t2s-floatbtn', false);
   const observations = [];
+  const mutationCallbacks = new Set();
   const timers = new Map();
   const dialogs = [];
   const downloads = [];
@@ -175,7 +176,11 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     performance, console: { warn() {} }, document, location: { hostname, reload() { reloads++; } },
     Node: { ELEMENT_NODE: 1, TEXT_NODE: 3, DOCUMENT_NODE: 9, DOCUMENT_FRAGMENT_NODE: 11 },
     NodeFilter: { SHOW_TEXT: 4, SHOW_ELEMENT: 1, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
-    MutationObserver: class { observe(...args) { observations.push(args); } disconnect() {} },
+    MutationObserver: class {
+      constructor(callback) { mutationCallbacks.add(callback); }
+      observe(...args) { observations.push(args); }
+      disconnect() {}
+    },
     BroadcastChannel: class {
       addEventListener(name, callback) { receiveBroadcast = callback; }
       postMessage(data) { broadcasts.push(data); }
@@ -228,6 +233,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       return root;
     },
     receiveBroadcast(data) { receiveBroadcast({ data }); },
+    // 把一批变更记录交给脚本的观察者回调（桩不模拟真实调度）
+    emitMutations(mutations) { mutationCallbacks.forEach((callback) => callback(mutations)); },
     failWrites(error) { writeError = error; },
     failReads(error) { readError = error; },
     setConfirmation(value) { confirmation = value; },

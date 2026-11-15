@@ -605,6 +605,26 @@ test('clicks inside the script UI skip the whole-document rescan', async () => {
   assert.equal(rescans(), 1, '普通点击仍然重扫');
 });
 
+test('unrelated mutations schedule no idle work, while new text does', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  h.api.start();
+  h.api.processQueue({ timeRemaining: () => 10 }); // 消费启动扫描排下的空闲任务
+  const idleTimers = () => [...h.timers.values()].filter(timer => timer.delay === 0).length;
+  const base = idleTimers();
+
+  const target = h.document.createElement('div');
+  h.emitMutations([{ type: 'attributes', attributeName: 'class', target, oldValue: 'on' }]);
+  assert.equal(idleTimers(), base, '无关的 class 变动不排空闲任务');
+
+  const text = h.document.createTextNode('繁體');
+  h.document.documentElement.appendChild(text);
+  h.emitMutations([{ type: 'childList', addedNodes: [text], target: h.document.documentElement }]);
+  assert.equal(idleTimers(), base + 1, '新增文本排一次空闲任务');
+
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(text.nodeValue, '简体');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

@@ -977,7 +977,9 @@
         });
       }
     }
-    scheduleIdle();
+    // 只有真的收集到节点才排空闲处理：class 一直被观察，页面上大量无关的
+    // class 变动不应反复唤起空闲回调。
+    if (queue.size) scheduleIdle();
   }
 
   const observer = new MutationObserver(handleMutations);
