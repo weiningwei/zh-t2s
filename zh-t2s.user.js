@@ -1498,12 +1498,12 @@
   let dragJustMoved = false;  // 刚发生过拖动，吞掉随后的误触 click
 
   function floatBtnStateText() {
-    if (!hasOpenCC) return { icon: '⚪', label: '未加载', on: false };
-    if (pagePaused) return { icon: '⚪', label: '本页已暂停', on: false };
-    if (effectiveState() === 'off') return { icon: '⚪', label: sitePreference === 'off' ? '此站不转换' : '已关闭', on: false };
+    if (!hasOpenCC) return { label: '未加载', on: false };
+    if (pagePaused) return { label: '本页已暂停', on: false };
+    if (effectiveState() === 'off') return { label: sitePreference === 'off' ? '此站不转换' : '已关闭', on: false };
     return effectiveState() === 't2s'
-      ? { icon: '🟢', label: '繁→简', on: true }
-      : { icon: '🟢', label: '简→繁·' + (traditionalStyle === 'hk' ? '港' : '台'), on: true };
+      ? { label: '繁→简', on: true }
+      : { label: '简→繁·' + (traditionalStyle === 'hk' ? '港' : '台'), on: true };
   }
 
   // 注入浮动 UI 样式表（唯一 class 前缀 zh-t2s-，不与页面样式冲突）。
@@ -1554,7 +1554,7 @@
     const css = [
       '.zh-t2s-floatpanel{' + themeVariables('light') + '}',
       '.zh-t2s-floatbtn{position:fixed;z-index:2147483646;display:flex;align-items:center;gap:6px;',
-      'margin:0;border:0;padding:7px 13px 7px 8px;border-radius:999px;cursor:grab;user-select:none;-webkit-user-select:none;',
+      'margin:0;border:0;padding:7px 12px 7px 10px;border-radius:999px;cursor:grab;user-select:none;-webkit-user-select:none;',
       'touch-action:none;font:12px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial,sans-serif;',
       'color:#fff;background:linear-gradient(135deg,#5b9bff,#2f6bff);box-shadow:0 4px 14px rgba(47,107,255,.38);',
       'transition:transform .12s ease,box-shadow .2s ease,background .2s ease,filter .15s ease;}',
@@ -1562,8 +1562,9 @@
       '.zh-t2s-floatbtn:active{transform:scale(.95);cursor:grabbing;}',
       '.zh-t2s-floatbtn:focus-visible{outline:2px solid #245fda;outline-offset:3px;}',
       '.zh-t2s-floatbtn.off{background:linear-gradient(135deg,#b8c0cc,#8a93a3);box-shadow:0 4px 14px rgba(0,0,0,.2);}',
-      '.zh-t2s-badge{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;',
-      'font-size:11px;font-weight:700;background:rgba(255,255,255,.22);color:#fff;flex:none;}',
+      // 状态点：绿点=生效中，灰点=关闭／暂停；方向交给胶囊文案，避免和“繁→简”重复
+      '.zh-t2s-badge{width:8px;height:8px;border-radius:50%;background:#57e08f;box-shadow:0 0 0 2px rgba(255,255,255,.25);flex:none;}',
+      '.zh-t2s-floatbtn.off .zh-t2s-badge{background:rgba(255,255,255,.55);box-shadow:none;}',
       '.zh-t2s-floatpanel{position:fixed;z-index:2147483646;width:280px;max-width:calc(100vw - 16px);box-sizing:border-box;',
       'background:var(--zh-bg);color:var(--zh-fg);border:1px solid var(--zh-border);border-radius:16px;',
       'box-shadow:var(--zh-shadow);padding:14px;overflow:auto;overscroll-behavior:contain;',
@@ -1640,6 +1641,7 @@
     }
     floatBtnBadge = document.createElement('span');
     floatBtnBadge.className = 'zh-t2s-badge';
+    floatBtnBadge.setAttribute('aria-hidden', 'true'); // 纯装饰，状态由按钮文案表达
     floatBtnLabel = document.createElement('span');
     floatBtn.appendChild(floatBtnBadge);
     floatBtn.appendChild(floatBtnLabel);
@@ -1669,8 +1671,7 @@
     if (!floatBtn) return;
     const s = floatBtnStateText();
     floatBtnLabel.textContent = s.label;
-    floatBtnBadge.textContent = s.on ? (effectiveState() === 's2t' ? '简' : '繁') : '·';
-    floatBtn.classList.toggle('off', !s.on);
+    floatBtn.classList.toggle('off', !s.on); // 状态点颜色由 .off 决定
   }
 
   function closeFloatPanel() {

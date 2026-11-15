@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 优化
+
+- 浮动按钮的状态徽标由单字（繁／简／·）改为状态点：生效中显示绿点、关闭／暂停显示半透明白点，方向只由胶囊文案表达，不再出现「繁 繁→简」这种重复；同时删掉 floatBtnStateText() 里从未被读取的 icon 字段。
+
 ### 修复
 
 - 录制快捷键时按 Esc 会连设置面板一起关掉：录制分支只调了 stopPropagation，阻止不了同一个 document 上面板的 Esc 处理器。现在改用 stopImmediatePropagation，并让面板的 Esc 处理在录制期间直接跳过，Esc 只取消录制、面板保持打开。
