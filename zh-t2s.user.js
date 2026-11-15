@@ -1549,6 +1549,22 @@
     };
   }
 
+  /** 弹窗骨架：固定定位的 <dialog> + shadow 根；配色与圆角只在这里定义一份。 */
+  function createDialogShell(label) {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'ignore-opencc';
+    dialog.setAttribute('aria-label', label);
+    Object.assign(dialog.style, {
+      position: 'fixed', inset: '0', margin: 'auto',
+      width: '560px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
+      boxSizing: 'border-box', padding: '0', borderRadius: '14px', ...dialogChrome(),
+      overflow: 'auto'
+    });
+    const host = document.createElement('div');
+    dialog.appendChild(host);
+    return { dialog, root: host.attachShadow({ mode: 'open' }) };
+  }
+
   function injectFloatStyles() {
     if (document.getElementById('zh-t2s-float-style')) return;
     const css = [
@@ -1820,18 +1836,7 @@
     closeFloatPanel();
     if (toolDialog) toolDialog.close();
     const previousFocus = document.activeElement;
-    const dialog = document.createElement('dialog');
-    dialog.className = 'ignore-opencc';
-    dialog.setAttribute('aria-label', title);
-    Object.assign(dialog.style, {
-      position: 'fixed', inset: '0', margin: 'auto', width: '560px',
-      maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
-      boxSizing: 'border-box', padding: '0', borderRadius: '14px', ...dialogChrome(),
-      overflow: 'auto'
-    });
-    const host = document.createElement('div');
-    dialog.appendChild(host);
-    const root = host.attachShadow({ mode: 'open' });
+    const { dialog, root } = createDialogShell(title);
     root.innerHTML = `<style>
       :host{${themeVariables('light')}color-scheme:light;}
       *{box-sizing:border-box}[hidden]{display:none!important}
@@ -2107,18 +2112,7 @@
   /** 词典编辑器弹窗骨架：dialog 元素 + shadow 根 + 样式与初始结构。
    *  只管结构与配色，草稿、预览与保存在调用方。 */
   function buildDictionaryEditorDialog(editingSite) {
-    const dialog = document.createElement('dialog');
-    dialog.className = 'ignore-opencc';
-    dialog.setAttribute('aria-label', '自定义词典');
-    Object.assign(dialog.style, {
-      position: 'fixed', inset: '0', margin: 'auto',
-      width: '560px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
-      boxSizing: 'border-box', padding: '0', borderRadius: '14px', ...dialogChrome(),
-      overflow: 'auto'
-    });
-    const host = document.createElement('div');
-    dialog.appendChild(host);
-    const root = host.attachShadow({ mode: 'open' });
+    const { dialog, root } = createDialogShell('自定义词典');
     root.innerHTML = `
       <style>
         :host{${themeVariables('light')}color-scheme:light;}
