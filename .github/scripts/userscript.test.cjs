@@ -809,6 +809,33 @@ test('the viewport hint still runs when only an inner container is scrolled', ()
   assert.ok(bigTexts.some((text) => text.nodeValue === '繁體'));
 });
 
+test('the click rescan also starts from the viewport', async () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const big = h.document.createElement('div');
+  const bigTexts = [];
+  for (let i = 0; i < 400; i++) {
+    const text = h.document.createTextNode('繁體');
+    bigTexts.push(text);
+    big.appendChild(text);
+  }
+  const tail = h.document.createElement('p');
+  const tailText = h.document.createTextNode('繁體');
+  tail.appendChild(tailText);
+  h.document.documentElement.appendChild(big);
+  h.document.documentElement.appendChild(tail);
+
+  h.setViewport({ scrollY: 500, at: tail });
+  await h.document.fire('click', { target: h.document.createElement('span') });
+  const entry = [...h.timers.entries()].find(([, timer]) => timer.delay === 160);
+  assert.ok(entry, '点击后应安排一次兜底重扫');
+  h.timers.delete(entry[0]);
+  entry[1].fn();
+
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(tailText.nodeValue, '简体', '重扫也从视口开始');
+  assert.ok(bigTexts.some((text) => text.nodeValue === '繁體'));
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

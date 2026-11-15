@@ -966,7 +966,9 @@
   const RESCAN_MIN_INTERVAL = 1000; // 全量扫描的最小间隔：延迟而不是丢弃，兜底不会漏扫
   function rescanDocument() {
     if (effectiveState() === 'off') return; // 关闭/站点停用/无 opencc 时不扫
-    enqueueSubtree(document.documentElement);
+    // 兜底重扫同样按视口排队：点击「加载更多」后用户正看着中部区域，
+    // 新内容在文档里却可能靠后。
+    enqueueDocument();
     scheduleIdle();
   }
   /** 点击是否发生在脚本自己的界面里：面板在 light DOM，弹窗内容在 shadow 树内，
