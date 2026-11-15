@@ -153,6 +153,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       return controls.get(selector);
     };
     root.querySelectorAll = selector => {
+      if (selector === '[data-tool]') return []; // 工具行由 innerHTML 生成，桩不模拟
       assert.equal(selector, '[data-direction]');
       return directions;
     };
@@ -247,7 +248,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       setState, setSitePreference, effectiveState, shouldSkipText, enqueueSubtree, processQueue,
       setPageState, setTraditionalStyle, syncSitePreferenceFromStorage, start,
       renderSitePreferenceControl, renderGlobalPreferenceControl, resetAllSettings,
-      validateSettingsBackup, createSettingsBackup, restoreSettingsBackup, openSettingsBackup, openToolDialog,
+      validateSettingsBackup, createSettingsBackup, restoreSettingsBackup, openSettingsBackup, openToolDialog, openMoreTools,
       beginShortcutCapture, applyShortcut, syncShortcutsFromStorage,
       shortcutConfig: () => ({ t2s: shortcutT2S, s2t: shortcutS2T }),
       shortcutState: () => shortcutCapture,

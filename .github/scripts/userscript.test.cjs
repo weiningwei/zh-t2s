@@ -922,6 +922,15 @@ test('Escape during capture cancels recording without reaching other keydown lis
   assert.equal(panelSawEscape, false, '录制期间 Esc 不应传给面板的关闭逻辑');
 });
 
+test('the more-tools dialog lists the secondary actions', () => {
+  const h = loadUserscript();
+  h.api.openMoreTools();
+  const root = h.dialogs.at(-1).children[0].shadowRoot;
+  for (const label of ['此网站忽略区域', '此网站词典', '选中文字转换', '站点偏好管理', '设置备份与恢复', '隐藏浮动按钮', '重置所有设置']) {
+    assert.ok(root.innerHTML.includes(label), '缺少入口：' + label);
+  }
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

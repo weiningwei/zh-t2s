@@ -1577,17 +1577,15 @@
       'border-radius:8px;background:var(--zh-tint);appearance:auto;cursor:pointer;line-height:1.4;}',
       '.zh-t2s-floatpanel button:focus-visible,.zh-t2s-floatpanel select:focus-visible{outline:2px solid var(--zh-accent);outline-offset:2px;}',
       '@keyframes zh-t2s-pop{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}',
-      '.zh-t2s-floatpanel .zh-t2s-row{display:block;width:100%;padding:10px;border-radius:8px;}',
+      '.zh-t2s-floatpanel .zh-t2s-row{display:block;width:100%;padding:9px 10px;border-radius:8px;}',
       '.zh-t2s-floatpanel .zh-t2s-row:hover,.zh-t2s-floatpanel .zh-t2s-close:hover{background:var(--zh-hover);}',
-      '.zh-t2s-footer{display:flex;align-items:center;gap:8px;margin-top:6px;}',
-      '.zh-t2s-floatpanel .zh-t2s-footer .zh-t2s-row{width:auto;padding:6px 2px;font-size:12px;color:var(--zh-hint);}',
-      '.zh-t2s-floatpanel .zh-t2s-footer .danger{color:var(--zh-danger);margin-left:auto;}',
+      '.zh-t2s-floatpanel .zh-t2s-row.danger{color:var(--zh-danger);}',
       '.zh-t2s-segments{display:flex;padding:3px;gap:4px;border-radius:9px;background:var(--zh-tint);}',
       '.zh-t2s-floatpanel .zh-t2s-seg{flex:1;text-align:center;padding:6px;border-radius:6px;color:var(--zh-muted);}',
       '.zh-t2s-floatpanel .zh-t2s-seg:hover{background:var(--zh-hover);}',
       '.zh-t2s-floatpanel .zh-t2s-seg.active{background:var(--zh-bg);color:var(--zh-accent);box-shadow:0 1px 4px #182e511a;font-weight:600;}',
       '.zh-t2s-divider{height:1px;background:var(--zh-border);margin:12px 0;}',
-      '.zh-t2s-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;}',
+      '.zh-t2s-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;}',
       '.zh-t2s-header-main{flex:1;min-width:0;}',
       '.zh-t2s-header .t{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-weight:650;font-size:15px;color:var(--zh-fg);}',
       '.zh-t2s-version{font-size:11px;font-weight:400;color:var(--zh-hint);background:var(--zh-tint);border-radius:4px;padding:2px 5px;white-space:nowrap;}',
@@ -1845,6 +1843,9 @@
       button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--zh-accent);outline-offset:2px}
       textarea,input[type="text"]{display:block;width:100%;padding:8px;border:1px solid var(--zh-border2);border-radius:8px;background:var(--zh-bg)}
       textarea{min-height:120px;resize:vertical}.actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:16px}
+      .tools{display:flex;flex-direction:column;gap:6px;margin:4px 0 6px}
+      .tools button{width:100%;text-align:left;padding:10px 12px}
+      .tools .danger{color:var(--zh-danger)}
       .status{min-height:24px;color:var(--zh-muted);white-space:pre-wrap;overflow-wrap:anywhere}.status[data-error="true"]{color:var(--zh-danger)}
       @media (prefers-color-scheme: dark){:host{${themeVariables('dark')}color-scheme:dark;}}
     </style><div class="body"><h2></h2>${contentHTML}<div class="status" role="status" aria-live="polite"></div></div>`;
@@ -2382,13 +2383,45 @@
   }
 
   /** 快捷键录制区：点一行进入录制，下一次按键即保存（Esc 取消）。 */
+  /** 二级工具面板：低频操作集中在这里，主面板只留常用项 */
+  function openMoreTools() {
+    const entries = [
+      ['此网站忽略区域', 'ignore', openIgnoreRules],
+      ['此网站词典 · ' + (siteDictionary.t2s.length + siteDictionary.s2t.length) + ' 条', 'site-dictionary', () => openDictionaryEditor('site')],
+      ['选中文字转换', 'selection', openSelectionTool],
+      ['站点偏好管理', 'sites', openSiteManager],
+      ['设置备份与恢复', 'backup', openSettingsBackup]
+    ];
+    const html = '<div class="tools">' +
+      entries.map(([label, key]) => '<button type="button" data-tool="' + key + '">' + label + '</button>').join('') +
+      '<button type="button" class="danger" data-tool="hide">隐藏浮动按钮</button>' +
+      '<button type="button" class="danger" data-tool="reset">重置所有设置</button></div>';
+    const { root, close } = openToolDialog('更多工具', html);
+    const actions = new Map(entries.map(([, key, run]) => [key, run]));
+    root.querySelectorAll('[data-tool]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.getAttribute('data-tool');
+        if (key === 'hide') { close(); setFloatBtnEnabled(false); return; }
+        if (key === 'reset') { close(); resetAllSettings(); return; }
+        const run = actions.get(key);
+        if (run) run(); // 这些工具会用自己的弹窗替换当前内容
+      });
+    });
+  }
+
+  let shortcutSectionOpen = false; // 快捷键在面板里默认收起，只占一行摘要
+
+  /** 快捷键：收起时一行摘要，点开才是两个方向的录制行 */
   function renderShortcutControl(panel) {
+    const summary = '快捷键 · ' + formatShortcut(shortcutT2S) + ' / ' + formatShortcut(shortcutS2T);
+    panel.appendChild(floatPanelRow((shortcutSectionOpen ? '▾ ' : '▸ ') + summary, () => {
+      shortcutSectionOpen = !shortcutSectionOpen;
+      renderFloatPanelContent();
+    }, { control: 'shortcuts' }));
+    if (!shortcutSectionOpen) return;
+
     const box = document.createElement('div');
     box.className = 'zh-t2s-style';
-    const title = document.createElement('div');
-    title.className = 'zh-t2s-field-title';
-    title.textContent = '快捷键（所有网站共用）';
-    box.appendChild(title);
     for (const direction of ['t2s', 's2t']) {
       const name = direction === 't2s' ? '繁→简' : '简→繁';
       const label = shortcutCapture === direction
@@ -2396,13 +2429,11 @@
         : name + ' · ' + formatShortcut(shortcutFor(direction));
       box.appendChild(floatPanelRow(label, () => beginShortcutCapture(direction), { control: 'shortcut-' + direction }));
     }
-    if (shortcutError) {
-      const hint = document.createElement('div');
-      hint.className = 'zh-t2s-hint error';
-      hint.textContent = shortcutError;
-      hint.setAttribute('role', 'status');
-      box.appendChild(hint);
-    }
+    const hint = document.createElement('div');
+    hint.className = 'zh-t2s-hint' + (shortcutError ? ' error' : '');
+    hint.textContent = shortcutError || '所有网站共用；F1–F12 可单独使用，其他按键需带 Ctrl／Alt／Cmd。';
+    hint.setAttribute('role', 'status');
+    box.appendChild(hint);
     panel.appendChild(box);
   }
 
@@ -2459,19 +2490,9 @@
     floatPanel.appendChild(floatPanelDivider());
     renderGlobalPreferenceControl(floatPanel);
     floatPanel.appendChild(floatPanelDivider());
-    renderShortcutControl(floatPanel);
-    floatPanel.appendChild(floatPanelDivider());
     floatPanel.appendChild(floatPanelRow('自定义词典 · ' + (dictionary.t2s.length + dictionary.s2t.length) + ' 条规则', openDictionaryEditor, { control: 'dictionary' }));
-    floatPanel.appendChild(floatPanelRow('此网站忽略区域', openIgnoreRules, { control: 'ignore' }));
-    floatPanel.appendChild(floatPanelRow('此网站词典 · ' + (siteDictionary.t2s.length + siteDictionary.s2t.length) + ' 条', () => openDictionaryEditor('site'), { control: 'site-dictionary' }));
-    floatPanel.appendChild(floatPanelRow('选中文字转换', openSelectionTool, { control: 'selection' }));
-    const footer = document.createElement('div');
-    footer.className = 'zh-t2s-footer';
-    footer.appendChild(floatPanelRow('站点偏好管理', openSiteManager, { control: 'sites' }));
-    footer.appendChild(floatPanelRow('设置备份与恢复', openSettingsBackup, { control: 'backup' }));
-    footer.appendChild(floatPanelRow('隐藏浮动按钮', () => setFloatBtnEnabled(false), { control: 'hide' }));
-    footer.appendChild(floatPanelRow('重置所有设置', resetAllSettings, { danger: true, control: 'reset' }));
-    floatPanel.appendChild(footer);
+    renderShortcutControl(floatPanel);
+    floatPanel.appendChild(floatPanelRow('更多工具 · 忽略区域／站点／备份', openMoreTools, { control: 'more' }));
     floatPanel.scrollTop = scrollTop;
     if (focused) floatPanel.querySelector?.('[data-control="' + focused + '"]')?.focus({ preventScroll: true });
     positionFloatPanel();
