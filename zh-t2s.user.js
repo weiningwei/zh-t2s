@@ -704,7 +704,7 @@
     const out = safeConvert(text);
     stats.time += performance.now() - t1;
     if (out !== text) {
-      stats.chars += text.length;                      // 累计实际改变字符数
+      stats.chars += text.length;                      // 累计处理过的字符数（按文本长度计）
       node.nodeValue = out;                             // 写回会触发 characterData 变更
       textState.set(node, out);
     } else {
@@ -736,7 +736,7 @@
       const out = safeConvert(val);
       stats.time += performance.now() - ta;
       if (out !== val) {
-        stats.chars += val.length;                      // 累计实际改变字符数
+        stats.chars += val.length;                     // 累计处理过的字符数（按文本长度计）
         el.setAttribute(attr, out);
       }
       map.set(attr, out);
