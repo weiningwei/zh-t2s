@@ -1063,6 +1063,55 @@
     shadowRoots.forEach(restoreIn); // 文档遍历不进入 shadow 树，需逐个补充
   }
 
+  /* 方向／字形／词典变化时的重写：按记录的原文算出新结果、只写一次。
+   * 旧做法是先 restoreAll() 把整页还原成原文再重扫转换，用户会看到
+   * 「原文 → 新方向」的两次翻转，DOM 也写了两遍。
+   * 页面在我们写入之后又改过的节点不覆盖，清掉记录交给随后的扫描；
+   * 当前已被排除（忽略规则刚加入、节点移进忽略区域）的节点直接还原。 */
+  function rewriteTextNode(node) {
+    const orig = textOriginal.get(node);
+    if (orig === undefined) return;                 // 从未转换过，交给后面的扫描
+    if (node.nodeValue !== textState.get(node)) {   // 页面已改动，重新转换交给扫描
+      textOriginal.delete(node);
+      textState.delete(node);
+      return;
+    }
+    if (node.parentElement && shouldSkipElement(node.parentElement)) { restoreTextNode(node); return; }
+    const out = safeConvert(orig);
+    if (node.nodeValue !== out) node.nodeValue = out;
+    textState.set(node, out);
+  }
+
+  function rewriteAttributes(el) {
+    if (!attrOriginal.has(el)) return;
+    if (shouldSkipElement(el, true)) { restoreAttributes(el); return; }
+    const origMap = attrOriginal.get(el);
+    const map = attrState.get(el);
+    for (const [attr, orig] of origMap) {
+      const cur = el.getAttribute(attr);
+      if (cur == null) continue;
+      if (!map || map.get(attr) !== cur) { origMap.delete(attr); continue; } // 页面已改动
+      const out = safeConvert(orig);
+      if (cur !== out) el.setAttribute(attr, out);
+      map.set(attr, out);
+    }
+  }
+
+  /** 遍历一个根（文档或 shadow 根），按原文重写转换结果 */
+  function rewriteIn(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (n.nodeType === Node.TEXT_NODE) rewriteTextNode(n);
+      else if (n.nodeType === Node.ELEMENT_NODE) rewriteAttributes(n);
+    }
+  }
+
+  function reconvertAll() {
+    rewriteIn(document.documentElement);
+    shadowRoots.forEach(rewriteIn); // 文档遍历不进入 shadow 树，需逐个补充
+  }
+
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
   function applyState(oldState, newState, conversionChanged = false) {
     if (!hasOpenCC || (oldState === 'off' && newState === 'off')) return;
@@ -1078,17 +1127,18 @@
       restoreAll();
       clearAllState();
       releaseShadowRoots(); // 先还原再注销，shadow 根要参与还原
-    } else if ((directionChanged || conversionChanged) && hasOpenCC) {
-      // 方向、繁体字形或词典改变：还原原文，再按新配置重扫
-      observer.disconnect();
-      queue.clear();
-      scheduled = false;
-      restoreAll();
-      clearAllState();
-      releaseShadowRoots(); // 同上；随后的全量重扫会按新配置重新登记
-      stats = { chars: 0, time: 0 };                    // 统计清零（还原+重转会让数字失真）
+    } else if (directionChanged || conversionChanged) {
+      // 方向、繁体字形、词典或忽略规则改变：按记录的原文直接算出新结果，只写一次。
+      // 观察者不必断开：写回仍由 textState/attrState 回环守卫过滤。
       convert = converterForState(newState);
-      observer.observe(document.documentElement, observerOptions());
+      stats = { chars: 0, time: 0 };                    // 统计清零（旧方向的数字已无意义）
+      // 忽略规则变化会换一份观察选项：重复 observe 是幂等的，只更新选项
+      const options = observerOptions();
+      observer.observe(document.documentElement, options);
+      shadowRoots.forEach((root) => shadowObserver.observe(root, options));
+      reconvertAll();
+      // 还没参与过转换的节点（新内容、刚从排除区域放出来）仍需扫一次；已重写的节点
+      // 在队列里被 textState 守卫 O(1) 跳过。
       enqueueSubtree(document.documentElement);
       scheduleIdle();
     } else if (!wasActive && isActive && hasOpenCC) {

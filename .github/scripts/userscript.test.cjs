@@ -692,6 +692,40 @@ test('observer options are reused until the id ignore rules change', () => {
   assert.ok(updated.attributeFilter.includes('id'));
 });
 
+test('switching direction rewrites from the original in a single write', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']], [['繁體', '繁体字']]) });
+  const el = document.createElement('div');
+  const writes = [];
+  let value = '繁體文案';
+  const text = { nodeType: 3, isConnected: true, parentElement: el };
+  Object.defineProperty(text, 'nodeValue', { get: () => value, set: (next) => { writes.push(next); value = next; } });
+  const attrWrites = [];
+  const setAttribute = el.setAttribute.bind(el);
+  el.setAttribute = (name, next) => { attrWrites.push(next); setAttribute(name, next); };
+  el.appendChild(text);
+  el.setAttribute('title', '繁體文案');
+  document.documentElement.appendChild(el);
+
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体文案');
+  assert.equal(el.getAttribute('title'), '简体文案');
+
+  writes.length = 0;
+  attrWrites.length = 0;
+  api.setState('s2t');
+  assert.deepEqual(writes, ['繁体字文案'], '直接写新方向的结果，不经过原文');
+  assert.deepEqual(attrWrites, ['繁体字文案']);
+  assert.equal(el.getAttribute('title'), '繁体字文案');
+
+  writes.length = 0;
+  api.setState('t2s'); // 原文记录仍保留，可继续按原文重写
+  assert.deepEqual(writes, ['简体文案']);
+
+  api.setState('off');
+  assert.equal(text.nodeValue, '繁體文案', '关闭仍可还原原文');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
