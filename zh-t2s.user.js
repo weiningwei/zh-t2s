@@ -115,6 +115,10 @@
     'TEMPLATE', 'XMP', 'PLAINTEXT', 'IFRAME', 'OBJECT', 'EMBED'
   ]);
 
+  // 只跳过内容、仍转换自身显示属性的标签：输入框与文本域里的占位提示、提示文字
+  // 是页面文案；用户输入的内容（<textarea> 文本、value 属性）仍然不处理。
+  const ATTR_ONLY_TAGS = new Set(['INPUT', 'TEXTAREA']);
+
   // 需要转换的可见文本属性
   // data-placeholder：部分框架/编辑器用该属性 + CSS content:attr() 渲染占位提示（如 Slate、Quill 定制主题）
   const CONVERTIBLE_ATTRS = ['placeholder', 'data-placeholder', 'title', 'alt', 'aria-label'];
@@ -592,18 +596,30 @@
     return root && root.host ? root.host : null;
   }
 
-  /** 是否属于 SKIP_TAGS：HTML 文档里 HTML 元素的 nodeName 已是大写，SVG／MathML 元素
+  /** 标签名查表键：HTML 文档里 HTML 元素的 nodeName 已是大写，SVG／MathML 元素
    *  与 XHTML 文档保留原大小写。首字符为小写字母（97 = 'a'）时才转大写查表，
    *  常规 HTML 元素仍只做一次 Set 查询，避免每次扫描为祖先节点生成新字符串。 */
-  function isSkipTag(el) {
+  function tagKey(el) {
     const name = el.nodeName;
-    return name.charCodeAt(0) < 97 ? SKIP_TAGS.has(name) : SKIP_TAGS.has(name.toUpperCase());
+    return name.charCodeAt(0) < 97 ? name : name.toUpperCase();
   }
 
-  /** 文本与属性共用的元素边界，包含所有被排除的祖先（含 shadow 宿主）。 */
-  function shouldSkipElement(el) {
+  /** 是否属于 SKIP_TAGS（整棵子树跳过）。 */
+  function isSkipTag(el) {
+    return SKIP_TAGS.has(tagKey(el));
+  }
+
+  /** 内容跳过、但自身属性仍参与转换的元素。 */
+  function allowsOwnAttributes(el) {
+    return ATTR_ONLY_TAGS.has(tagKey(el));
+  }
+
+  /** 文本与属性共用的元素边界，包含所有被排除的祖先（含 shadow 宿主）。
+   *  forAttributes 为 true 时，只跳过内容、允许转换自身属性的标签（输入框／文本域）
+   *  不算排除，其余规则不变。 */
+  function shouldSkipElement(el, forAttributes = false) {
     for (let ancestor = el; ancestor; ancestor = ancestorOf(ancestor)) {
-      if (isSkipTag(ancestor)) return true;
+      if (isSkipTag(ancestor) && !(forAttributes && ancestor === el && allowsOwnAttributes(ancestor))) return true;
       // .ignore-opencc 逐个祖先实时判定，兼容类名变更与节点移动；closest 不跨越 shadow 边界
       if (ancestor.classList && ancestor.classList.contains('ignore-opencc')) return true;
       // 标签规则按大写比较：SVG／MathML 等外来元素的 nodeName 保留原本大小写。
@@ -687,7 +703,7 @@
   }
 
   function convertAttributes(el) {
-    if (shouldSkipElement(el)) return;
+    if (shouldSkipElement(el, true)) return;
     let map = attrState.get(el);
     if (!map) { map = new Map(); attrState.set(el, map); }
     let origMap = attrOriginal.get(el);
@@ -730,7 +746,10 @@
     const t = root.nodeType;
     if (t === Node.TEXT_NODE) { queue.add(root); return; }
     if (t !== Node.ELEMENT_NODE && t !== Node.DOCUMENT_FRAGMENT_NODE && t !== Node.DOCUMENT_NODE) return;
-    if (!ignoreRules.length && t === Node.ELEMENT_NODE && isSkipTag(root)) return; // 整棵子树跳过
+    if (!ignoreRules.length && t === Node.ELEMENT_NODE && isSkipTag(root)) {
+      if (allowsOwnAttributes(root)) queue.add(root); // 表单元素自身的显示属性仍要转换
+      return; // 整棵子树跳过
+    }
 
     // 1) Text 节点与 shadow 宿主：一次遍历同时收集
     //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText；TreeWalker 不进入 shadow 树，
@@ -750,7 +769,7 @@
     try {
       if (t === Node.ELEMENT_NODE && root.matches?.(ATTR_SELECTOR)) queue.add(root);
       root.querySelectorAll?.(ATTR_SELECTOR).forEach((el) => {
-        if (!isSkipTag(el)) queue.add(el);
+        if (!isSkipTag(el) || allowsOwnAttributes(el)) queue.add(el);
       });
     } catch (e) { /* querySelectorAll 在某些非标准节点上可能抛错，忽略 */ }
   }
@@ -829,7 +848,7 @@
         else if (!shouldSkipText(node)) convertTextNode(node);
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         if (ignoreRules.length && shouldSkipElement(node)) restoreAttributes(node);
-        else if (!isSkipTag(node)) convertAttributes(node);
+        else if (!isSkipTag(node) || allowsOwnAttributes(node)) convertAttributes(node);
       }
       processed++;
     }

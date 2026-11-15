@@ -493,6 +493,34 @@ test('ignored regions and script UI stay untouched across the shadow boundary', 
   assert.equal(observations.length, 0, '忽略区域内的 shadow 根不登记观察');
 });
 
+test('input and textarea convert their display attributes but keep user content intact', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const input = document.createElement('input');
+  input.setAttribute('placeholder', '繁體提示');
+  input.setAttribute('title', '繁體說明');
+  input.setAttribute('aria-label', '繁體標籤');
+  input.setAttribute('value', '繁體輸入值');
+  const textarea = document.createElement('textarea');
+  textarea.setAttribute('placeholder', '繁體佔位');
+  const text = document.createTextNode('繁體內容');
+  textarea.appendChild(text);
+  document.documentElement.appendChild(input);
+  document.documentElement.appendChild(textarea);
+
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(input.getAttribute('placeholder'), '简体提示');
+  assert.equal(input.getAttribute('title'), '简体說明');
+  assert.equal(input.getAttribute('aria-label'), '简体標籤');
+  assert.equal(input.getAttribute('value'), '繁體輸入值', '输入值不转换');
+  assert.equal(textarea.getAttribute('placeholder'), '简体佔位');
+  assert.equal(text.nodeValue, '繁體內容', '文本域内容不转换');
+
+  api.setState('off');
+  assert.equal(input.getAttribute('placeholder'), '繁體提示');
+  assert.equal(textarea.getAttribute('placeholder'), '繁體佔位');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
