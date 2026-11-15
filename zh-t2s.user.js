@@ -2105,11 +2105,9 @@
 
   // 独立模态编辑器：不随 refreshMenu 重绘，草稿只在保存时写入 GM 存储。
   let dictionaryDialog = null;
-  function openDictionaryEditor(scope = 'global') {
-    const editingSite = scope === 'site';
-    closeFloatPanel();
-    if (dictionaryDialog) { dictionaryDialog.focus(); return; }
-    syncDictionaryFromStorage(); // 不依赖 visibilitychange，重新打开即可读取其他页面的修改
+  /** 词典编辑器弹窗骨架：dialog 元素 + shadow 根 + 样式与初始结构。
+   *  只管结构与配色，草稿、预览与保存在调用方。 */
+  function buildDictionaryEditorDialog(editingSite) {
     const dialog = document.createElement('dialog');
     dialog.className = 'ignore-opencc';
     dialog.setAttribute('aria-label', '自定义词典');
@@ -2165,137 +2163,153 @@
           <button type="button" class="save" data-action="save">保存并应用</button>
         </div>
       </div>`;
-    const editors = {
-      t2s: root.querySelector('[data-editor="t2s"]'),
-      s2t: root.querySelector('[data-editor="s2t"]')
+    return { dialog, root };
+  }
+
+  /** 把词典数据填进两个方向的文本框 */
+  function fillDictionaryEditors(editors, data) {
+    for (const direction of ['t2s', 's2t']) {
+      editors[direction].value = data[direction].map(([source, target]) => source + ' => ' + target).join('\n');
+    }
+  }
+
+  /** 解析两个文本框的草稿并校验；格式错误时抛出带行号的错误 */
+  function readDictionaryDraft(editors) {
+    const data = { t2s: [], s2t: [] };
+    for (const direction of ['t2s', 's2t']) {
+      const label = direction === 't2s' ? '繁→简' : '简→繁';
+      editors[direction].value.split(/\r?\n/).forEach((line, index) => {
+        if (!line.trim()) return;
+        const parts = splitDictionaryLine(line);
+        if (!parts) throw new Error(label + '第 ' + (index + 1) + ' 行缺少分隔符，可用 =>、->、→、＝＞，或从表格粘贴。');
+        data[direction].push([parts[0].trim(), parts[1].trim()]);
+      });
+    }
+    return validateDictionary(data);
+  }
+
+  /** 预览与输入反馈：用当前草稿编译一次，输入法合成期间暂停 */
+  function createDictionaryPreview({ root, readDraft, showStatus, editingSite }) {
+    const input = root.querySelector('[data-preview-input]');
+    const out = root.querySelector('[data-preview-out]');
+    let cache = { key: '', tries: null };
+    let timer = 0;
+    let composing = false;
+
+    const activeDirection = () => {
+      const button = root.querySelector('[data-direction][aria-pressed="true"]');
+      return button ? button.dataset.direction : 't2s';
     };
-    const status = root.querySelector('.status');
-    function showStatus(message, error = false) {
-      status.textContent = message;
-      status.dataset.error = String(error);
-    }
-    function fillEditors(data) {
-      for (const direction of ['t2s', 's2t']) {
-        editors[direction].value = data[direction].map(([a, b]) => a + ' => ' + b).join('\n');
-      }
-    }
-    function readEditors() {
-      const data = { t2s: [], s2t: [] };
-      for (const direction of ['t2s', 's2t']) {
-        const label = direction === 't2s' ? '繁→简' : '简→繁';
-        const lines = editors[direction].value.split(/\r?\n/);
-        lines.forEach((line, index) => {
-          if (!line.trim()) return;
-          const parts = splitDictionaryLine(line);
-          if (!parts) {
-            throw new Error(label + '第 ' + (index + 1) + ' 行缺少分隔符，可用 =>、->、→、＝＞，或从表格粘贴。');
-          }
-          data[direction].push([parts[0].trim(), parts[1].trim()]);
-        });
-      }
-      return validateDictionary(data);
-    }
-    fillEditors(editingSite ? siteDictionary : dictionary);
-    const initialDraft = JSON.stringify(editingSite ? siteDictionary : dictionary);
-    function hasChanges() {
-      try { return JSON.stringify(readEditors()) !== initialDraft; }
-      catch (e) { return true; }
-    }
-    function cancel() {
-      if (!hasChanges() || window.confirm('放弃尚未保存的词典修改？')) dialog.close();
-    }
-    const previewInput = root.querySelector('[data-preview-input]');
-    const previewOut = root.querySelector('[data-preview-out]');
-    let previewCache = { key: '', tries: null };
-    let previewTimer = 0;
-    let isComposing = false;
-    function activeDirection() {
-      const active = root.querySelector('[data-direction][aria-pressed="true"]');
-      return active ? active.dataset.direction : 't2s';
-    }
+
     /** 用当前草稿预览示例文字：不写入存储，也不影响页面转换 */
-    function refreshPreview() {
-      if (isComposing) return;
-      const sample = previewInput.value;
-      if (!sample) { previewOut.textContent = '预览结果会显示在这里'; return; }
-      if (!hasOpenCC) { previewOut.textContent = '转换引擎未加载，无法预览。'; return; }
+    function refresh() {
+      if (composing) return;
+      const sample = input.value;
+      if (!sample) { out.textContent = '预览结果会显示在这里'; return; }
+      if (!hasOpenCC) { out.textContent = '转换引擎未加载，无法预览。'; return; }
       let draft;
-      try { draft = readEditors(); }
-      catch (e) { previewOut.textContent = '规则有误，无法预览。'; showStatus(e.message, true); return; }
+      try { draft = readDraft(); }
+      catch (e) { out.textContent = '规则有误，无法预览。'; showStatus(e.message, true); return; }
       const key = JSON.stringify(draft);
-      if (!previewCache.tries || previewCache.key !== key) {
-        previewCache = { key, tries: buildDictionaryTries(editingSite ? mergeDictionaries(dictionary, draft) : mergeDictionaries(draft, siteDictionary)).tries };
+      if (!cache.tries || cache.key !== key) {
+        cache = { key, tries: buildDictionaryTries(editingSite ? mergeDictionaries(dictionary, draft) : mergeDictionaries(draft, siteDictionary)).tries };
       }
       const direction = activeDirection();
       const convertFn = direction === 's2t' ? converterForState('s2t') : converters.t2s;
-      if (!convertFn) { previewOut.textContent = '转换引擎未加载，无法预览。'; return; }
-      try {
-        previewOut.textContent = applyDictionary(sample, convertFn, previewCache.tries[direction]);
-      } catch (e) { previewOut.textContent = '预览失败：' + e.message; }
+      if (!convertFn) { out.textContent = '转换引擎未加载，无法预览。'; return; }
+      try { out.textContent = applyDictionary(sample, convertFn, cache.tries[direction]); }
+      catch (e) { out.textContent = '预览失败：' + e.message; }
     }
+
     /** 独立于预览的输入反馈：解析成功显示条数，失败显示首条错误 */
-    function refreshValidationFeedback() {
-      if (isComposing) return;
+    function feedback() {
+      if (composing) return;
       let draft;
-      try { draft = readEditors(); }
+      try { draft = readDraft(); }
       catch (e) { showStatus(e.message, true); return; }
       const total = draft.t2s.length + draft.s2t.length;
       if (!total) { showStatus('还没有规则。每行一条：原词 => 替换。'); return; }
       showStatus('已识别 ' + total + ' 条规则（繁→简 ' + draft.t2s.length + ' 条，简→繁 ' + draft.s2t.length + ' 条）。');
     }
-    refreshValidationFeedback();
+
     /** 去抖刷新：合成期间（拼音等）不触发，避免半成品文本闪错误 */
-    function scheduleFeedbackRefresh() {
-      clearTimeout(previewTimer);
-      if (isComposing) return;
-      previewTimer = setTimeout(() => {
-        if (isComposing) return;
-        refreshValidationFeedback();
-        refreshPreview();
-      }, 300);
+    function schedule() {
+      clearTimeout(timer);
+      if (composing) return;
+      timer = setTimeout(() => { if (composing) return; feedback(); refresh(); }, 300);
     }
-    previewInput.addEventListener('input', (e) => { if (!e.isComposing) refreshPreview(); });
+
+    return {
+      input, refresh, feedback, schedule,
+      startComposition() { composing = true; clearTimeout(timer); },
+      endComposition(fromPreview) {
+        composing = false;
+        if (fromPreview) refresh();
+        schedule();
+      },
+      dispose() { clearTimeout(timer); }
+    };
+  }
+
+  function openDictionaryEditor(scope = 'global') {
+    const editingSite = scope === 'site';
+    closeFloatPanel();
+    if (dictionaryDialog) { dictionaryDialog.focus(); return; }
+    syncDictionaryFromStorage(); // 不依赖 visibilitychange，重新打开即可读取其他页面的修改
+
+    const { dialog, root } = buildDictionaryEditorDialog(editingSite);
+    const editors = {
+      t2s: root.querySelector('[data-editor="t2s"]'),
+      s2t: root.querySelector('[data-editor="s2t"]')
+    };
+    const status = root.querySelector('.status');
+    const showStatus = (message, error = false) => { status.textContent = message; status.dataset.error = String(error); };
+    const readDraft = () => readDictionaryDraft(editors);
+    const storedDraft = editingSite ? siteDictionary : dictionary;
+    fillDictionaryEditors(editors, storedDraft);
+    const initialDraft = JSON.stringify(storedDraft);
+    const hasChanges = () => { try { return JSON.stringify(readDraft()) !== initialDraft; } catch (e) { return true; } };
+    const cancel = () => { if (!hasChanges() || window.confirm('放弃尚未保存的词典修改？')) dialog.close(); };
+
+    const preview = createDictionaryPreview({ root, readDraft, showStatus, editingSite });
+    preview.feedback();
+    preview.input.addEventListener('input', (e) => { if (!e.isComposing) preview.refresh(); });
     for (const direction of ['t2s', 's2t']) {
-      editors[direction].addEventListener('input', (e) => { if (!e.isComposing) scheduleFeedbackRefresh(); });
+      editors[direction].addEventListener('input', (e) => { if (!e.isComposing) preview.schedule(); });
     }
-    for (const input of [editors.t2s, editors.s2t, previewInput]) {
-      input.addEventListener('compositionstart', () => {
-        isComposing = true;
-        clearTimeout(previewTimer);
-      });
-      input.addEventListener('compositionend', () => {
-        isComposing = false;
-        if (input === previewInput) refreshPreview();
-        scheduleFeedbackRefresh();
-      });
+    for (const input of [editors.t2s, editors.s2t, preview.input]) {
+      input.addEventListener('compositionstart', () => preview.startComposition());
+      input.addEventListener('compositionend', () => preview.endComposition(input === preview.input));
     }
     root.querySelectorAll('[data-direction]').forEach((button) => {
       button.addEventListener('click', () => {
-        root.querySelectorAll('[data-direction]').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+        root.querySelectorAll('[data-direction]').forEach((other) => other.setAttribute('aria-pressed', String(other === button)));
         for (const direction of ['t2s', 's2t']) editors[direction].hidden = direction !== button.dataset.direction;
         editors[button.dataset.direction].focus();
-        refreshPreview();
+        preview.refresh();
       });
     });
     root.querySelector('[data-action="cancel"]').addEventListener('click', cancel);
     dialog.addEventListener('cancel', (e) => { e.preventDefault(); cancel(); });
-    dialog.addEventListener('close', () => { clearTimeout(previewTimer); dictionaryDialog = null; dialog.remove(); });
+    dialog.addEventListener('close', () => { preview.dispose(); dictionaryDialog = null; dialog.remove(); });
+
     root.querySelector('[data-action="save"]').addEventListener('click', () => {
-      clearTimeout(previewTimer);
+      preview.dispose();
       try {
         // 打开编辑器后若存储已被其他页面改写，先确认再覆盖，避免静默丢失对方改动
         const stored = editingSite ? readSiteDictionary() : readStoredDictionary();
         if (stored && JSON.stringify(stored) !== initialDraft &&
             !window.confirm('词典已在其他页面更新，继续保存会覆盖对方的修改。\n建议先取消并重新打开编辑器查看最新内容。确定覆盖吗？')) return;
-        if (editingSite) saveSiteDictionary(readEditors());
-        else saveDictionary(readEditors());
+        if (editingSite) saveSiteDictionary(readDraft());
+        else saveDictionary(readDraft());
         dialog.close();
       } catch (e) { showStatus('保存失败：' + e.message, true); }
     });
+
     const fileInput = root.querySelector('input[type="file"]');
     root.querySelector('[data-action="import"]').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', async () => {
-      clearTimeout(previewTimer);
+      preview.dispose();
       try {
         const file = fileInput.files[0];
         if (!file) return;
@@ -2303,16 +2317,16 @@
         const data = validateDictionary(JSON.parse(await file.text()));
         if (!dialog.isConnected) return;
         if (hasChanges() && !window.confirm('导入将替换两个方向的当前草稿，是否继续？')) return;
-        fillEditors(data);
-        refreshPreview();
+        fillDictionaryEditors(editors, data);
+        preview.refresh();
         showStatus('已导入两个方向的草稿，点击“保存并应用”后生效。');
       } catch (e) { showStatus('导入失败：' + e.message, true); }
       finally { fileInput.value = ''; }
     });
     root.querySelector('[data-action="export"]').addEventListener('click', () => {
-      clearTimeout(previewTimer);
+      preview.dispose();
       try {
-        const data = readEditors();
+        const data = readDraft();
         const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
         const link = document.createElement('a');
         link.href = url;
@@ -2324,6 +2338,7 @@
         showStatus('已导出当前草稿；尚未保存的修改需点击“保存并应用”。');
       } catch (e) { showStatus('导出失败：' + e.message, true); }
     });
+
     document.documentElement.appendChild(dialog);
     dictionaryDialog = dialog;
     dialog.showModal();
