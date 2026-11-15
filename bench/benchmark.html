@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zh-t2s 基准页</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif; }
+  #hud { position: sticky; top: 0; z-index: 9; padding: 10px 14px; background: Canvas; border-bottom: 1px solid #8884; }
+  #hud h1 { margin: 0 0 6px; font-size: 15px; }
+  #hud table { border-collapse: collapse; font-size: 12px; }
+  #hud td { padding: 1px 10px 1px 0; white-space: nowrap; }
+  #hud td:first-child { color: #888; }
+  #hud .actions { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+  #hud button { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid #8886; border-radius: 6px; background: Canvas; color: inherit; cursor: pointer; }
+  #hud details { margin-top: 6px; font-size: 12px; color: #666; }
+  #hud code { background: #8881; padding: 0 3px; border-radius: 3px; }
+  #content { padding: 14px; max-width: 900px; }
+  #content p { margin: 0 0 8px; }
+  bench-card { display: block; border-left: 2px solid #0a04; padding: 4px 10px; margin: 8px 0; }
+  .ignore-opencc { background: #8881; padding: 8px; border-radius: 6px; margin: 8px 0; }
+</style>
+</head>
+<body>
+<div id="hud" class="ignore-opencc">
+  <h1>zh-t2s 基准页 <small id="hud-params"></small></h1>
+  <table>
+    <tr><td>规模</td><td id="m-scale">-</td></tr>
+    <tr><td>首次写入</td><td id="m-first">等待转换…</td></tr>
+    <tr><td>全部写入</td><td id="m-total">-</td></tr>
+    <tr><td>变更记录</td><td id="m-records">0</td></tr>
+    <tr><td>长任务</td><td id="m-longtask">0</td></tr>
+  </table>
+  <div class="actions">
+    <button type="button" id="btn-rebuild">重建内容并重新计时</button>
+    <button type="button" id="btn-copy">复制结果 JSON</button>
+  </div>
+  <details class="ignore-opencc">
+    <summary>怎么用</summary>
+    <p>用本地静态服务器打开本页（脚本不匹配 file://）：在仓库根目录执行 <code>python -m http.server 8000</code> 或 <code>npx serve</code>，然后访问
+      <code>http://localhost:8000/bench/benchmark.html</code>；或临时给脚本加 <code>@match file://*/*</code> 并在管理器里允许访问文件网址。</p>
+    <p>对照基线：在管理器里停用脚本后刷新，报告应显示“未检测到转换”，此时的“规模”行给出页面自身的节点数。</p>
+    <p>参数（可叠加）：<code>?blocks=3000</code> 段落数、<code>&amp;per=3</code> 每段文本节点数、<code>&amp;shadow=6</code> 带 shadow 树的组件数、
+      <code>&amp;attrs=200</code> 带 title/alt 的元素数、<code>&amp;ignore=2</code> 忽略区域数、<code>&amp;long=1</code> 是否插入约 20–40KB 的超长文本节点、
+      <code>&amp;lang=en</code> 只放英文（只测扫描、不触发转换）。</p>
+  </details>
+</div>
+
+<div id="content"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- 1. 参数与可复现的伪随机 ---------- */
+  const query = new URLSearchParams(location.search);
+  const num = (key, fallback) => {
+    const value = Number(query.get(key));
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
+  };
+  const config = {
+    blocks: num('blocks', 3000),
+    per: Math.max(1, num('per', 3)),
+    shadow: num('shadow', 6),
+    attrs: num('attrs', 200),
+    ignore: num('ignore', 2),
+    long: num('long', 1),
+    lang: query.get('lang') === 'en' ? 'en' : 't'
+  };
+
+  let seed = 20261115;
+  const random = () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const pick = (list) => list[Math.floor(random() * list.length) % list.length];
+
+  const TRAD = [
+    '繁體中文的段落內容，用來測試轉換速度與重新排版的影響。',
+    '這個頁面刻意塞滿文字節點，讓腳本必須分批處理才不會卡住主執行緒。',
+    '每個段落包含數個文本節點，模擬真實文章與評論區的節點分布。',
+    '廣東話與台灣用語混在一起，腳本仍然只做字形轉換、不改地區用詞。'
+  ];
+  const EN = [
+    'The quick brown fox jumps over the lazy dog. ',
+    'Benchmark paragraph without any Chinese characters at all. '
+  ];
+  const sentence = () => pick(config.lang === 'en' ? EN : TRAD);
+
+  /* ---------- 2. 内容生成 ---------- */
+  const makeParagraph = (index) => {
+    const p = document.createElement('p');
+    for (let j = 0; j < config.per; j++) {
+      if (j) p.appendChild(document.createTextNode(' ')); // 空白文本节点：扫描时应当被过滤掉
+      p.appendChild(document.createTextNode(sentence() + '#' + index + '-' + j));
+    }
+    return p;
+  };
+
+  class BenchInner extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      const root = this.attachShadow({ mode: 'open' });
+      const p = document.createElement('p');
+      p.appendChild(document.createTextNode('內層 shadow 樹裡的一段繁體文字。'));
+      root.appendChild(p);
+    }
+  }
+  class BenchCard extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      const root = this.attachShadow({ mode: 'open' });
+      const style = document.createElement('style');
+      style.textContent = ':host{display:block;padding:4px 0}';
+      root.appendChild(style);
+      for (let i = 0; i < 6; i++) root.appendChild(makeParagraph(-1));
+      root.appendChild(document.createElement('bench-inner'));
+    }
+  }
+  customElements.define('bench-inner', BenchInner);
+  customElements.define('bench-card', BenchCard);
+
+  const content = document.getElementById('content');
+  const $ = (id) => document.getElementById(id);
+  const fmt = (value) => (value === null ? '-' : value.toFixed(1) + ' ms');
+
+  let builtAt = 0;
+  const shadowRoots = [];
+
+  function build() {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < config.blocks; i++) frag.appendChild(makeParagraph(i));
+
+    for (let i = 0; i < config.attrs; i++) {
+      const img = document.createElement('img');
+      img.width = 1; img.height = 1;
+      img.alt = '繁體圖片說明';
+      img.title = '繁體提示文字';
+      frag.appendChild(img);
+    }
+
+    for (let i = 0; i < config.ignore; i++) {
+      const box = document.createElement('div');
+      box.className = 'ignore-opencc';
+      for (let j = 0; j < 40; j++) box.appendChild(makeParagraph(-2));
+      frag.appendChild(box);
+    }
+
+    for (let i = 0; i < config.shadow; i++) frag.appendChild(document.createElement('bench-card'));
+
+    if (config.long) {
+      const p = document.createElement('p');
+      p.textContent = TRAD.join('').repeat(400); // 约 20–40 KB 的单个文本节点
+      frag.appendChild(p);
+    }
+
+    content.textContent = '';
+    content.appendChild(frag);
+    builtAt = performance.now();
+  }
+
+  /* ---------- 3. 规模统计（含 shadow 树） ---------- */
+  const scale = { texts: 0, elements: 0, shadows: 0 };
+
+  function countDom() {
+    scale.texts = 0; scale.elements = 0; scale.shadows = 0;
+    shadowRoots.length = 0;
+    const walk = (rootNode) => {
+      const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        if (node.nodeType === Node.TEXT_NODE) { scale.texts++; continue; }
+        scale.elements++;
+        if (node.shadowRoot) { scale.shadows++; shadowRoots.push(node.shadowRoot); walk(node.shadowRoot); }
+      }
+    };
+    walk(content);
+  }
+
+  /* ---------- 4. 计时 ---------- */
+  const SETTLE_MS = 500;
+  const state = { first: null, last: null, records: 0, longCount: 0, longTotal: 0, timer: 0, measuring: false, idle: false };
+
+  const isHud = (node) => {
+    const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return !!(el && el.closest && el.closest('#hud'));
+  };
+
+  const observer = new MutationObserver((records) => {
+    if (!state.measuring) return;
+    let counted = 0;
+    for (const record of records) if (!isHud(record.target)) counted++; // 报告区自身的刷新不算转换
+    if (!counted) return;
+    const now = performance.now();
+    if (state.first === null) state.first = now;
+    state.last = now;
+    state.records += counted;
+    clearTimeout(state.timer);
+    state.timer = setTimeout(finalize, SETTLE_MS);
+    paint();
+  });
+
+  try {
+    new PerformanceObserver((list) => {
+      if (!state.measuring) return;
+      for (const entry of list.getEntries()) {
+        state.longCount++;
+        state.longTotal += entry.duration;
+      }
+      paint();
+    }).observe({ entryTypes: ['longtask'] });
+  } catch (e) { /* 不支持 longtask 的浏览器忽略 */ }
+
+  function summary() {
+    return {
+      config,
+      scale,
+      firstWriteMs: state.first === null ? null : +state.first.toFixed(1),
+      firstWriteFromBuildMs: state.first === null ? null : +(state.first - builtAt).toFixed(1),
+      totalConvertMs: state.last === null ? null : +(state.last - builtAt).toFixed(1),
+      records: state.records,
+      longTasks: state.longCount,
+      longTaskTotalMs: +state.longTotal.toFixed(1)
+    };
+  }
+
+  function paint() {
+    $('hud-params').textContent = '(' + Object.entries(config).map(([key, value]) => key + '=' + value).join(' ') + ')';
+    $('m-scale').textContent = scale.texts + ' 文本 / ' + scale.elements + ' 元素 / ' + scale.shadows + ' shadow 根';
+    if (state.first === null) {
+      $('m-first').textContent = state.idle ? '未检测到转换（脚本是否启用？）' : '等待转换…';
+    } else {
+      $('m-first').textContent = fmt(state.first) + '（构建后 ' + fmt(state.first - builtAt) + '）';
+    }
+    $('m-total').textContent = state.last === null ? '-' : fmt(state.last - builtAt);
+    $('m-records').textContent = state.records + ' 条';
+    $('m-longtask').textContent = state.longCount + ' 次 / ' + state.longTotal.toFixed(1) + ' ms';
+  }
+
+  function finalize() {
+    clearTimeout(state.timer);
+    state.measuring = false;
+    state.idle = state.first === null;
+    paint();
+    const data = summary();
+    console.log('[bench] ' + JSON.stringify(data));
+    if (state.first === null) console.warn('[bench] 没有检测到任何写入：确认脚本已启用，且此页面未被站点偏好或忽略规则排除。');
+  }
+
+  function startRound() {
+    state.measuring = false;
+    observer.disconnect();
+    clearTimeout(state.timer);
+
+    build();      // 构建期间的变更不计入
+    countDom();
+
+    state.first = null;
+    state.last = null;
+    state.records = 0;
+    state.longCount = 0;
+    state.longTotal = 0;
+    state.idle = false;
+    state.measuring = true;
+
+    const options = { subtree: true, characterData: true, attributes: true, childList: true };
+    observer.observe(content, options);
+    shadowRoots.forEach((root) => observer.observe(root, options)); // shadow 树内的写入也要计入
+    // 3 秒内一次写入都没有，就提示可能是脚本被停用，而不是一直"等待转换…"
+    state.timer = setTimeout(() => { if (state.first === null) { state.idle = true; paint(); } }, 3000);
+    paint();
+  }
+
+  $('btn-rebuild').addEventListener('click', startRound);
+  $('btn-copy').addEventListener('click', async () => {
+    const text = JSON.stringify(summary(), null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      $('btn-copy').textContent = '已复制';
+    } catch (e) {
+      console.log(text);
+      $('btn-copy').textContent = '已打印到控制台';
+    }
+    setTimeout(() => { $('btn-copy').textContent = '复制结果 JSON'; }, 1200);
+  });
+
+  startRound();
+})();
+</script>
+</body>
+</html>

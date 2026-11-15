@@ -17,6 +17,7 @@ A single-file Tampermonkey userscript (`zh-t2s.user.js`) that converts between T
 - Edit `zh-t2s.user.js` directly; no build step. Save → install/reinstall in Tampermonkey → test.
 - **Separate development and release commits**: commit feature/fix code and related usage documentation independently of release metadata. Add change notes under `CHANGELOG.md`'s `Unreleased` section during development; do not bump the published version in feature/fix commits.
 - **Release commit**: use a separate `chore(release): <version>` commit to update `@version`, move `Unreleased` notes into a matching dated release entry in `CHANGELOG.md`, and update the README version badge together. Keep feature code out of this release commit. Pick the level with the table below, not by feel.
+- **Benchmark**: `bench/benchmark.html` is a synthetic page (params `?blocks=&per=&shadow=&attrs=&ignore=&long=&lang=`) that reports node counts, first-write delay, total conversion time and long tasks. Serve it over HTTP (`python -m http.server`) — the userscript does not match `file://`. Disable the script and reload to get the page-only baseline.
 - Maintain the metadata block (`// ==UserScript==`) carefully — Tampermonkey parses it.
   - Current grants: `GM_registerMenuCommand`, `GM_unregisterMenuCommand`, `GM_setValue`, `GM_getValue`.
   - `@noframes` prevents injection into iframes (ad/tracking iframe protection). Remove to re-enable iframe conversion.
