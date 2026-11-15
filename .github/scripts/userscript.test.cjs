@@ -249,17 +249,49 @@ test('site preference broadcasts and visibility updates restore and reconvert wi
   assert.equal(harness.api.effectiveState(), 't2s');
 });
 
-test('site preference selector exposes four choices and saves immediately', async () => {
+test('site preference selector offers the paused option and saves the rest', async () => {
   const { api, document, storage } = loadUserscript();
   const panel = document.createElement('div');
   api.renderSitePreferenceControl(panel);
   const select = panel.children[0].children.find(child => child.nodeName === 'SELECT');
-  assert.deepEqual(select.children.map(option => option.value), ['follow', 't2s', 's2t', 'off']);
+  assert.deepEqual(select.children.map(option => option.value), ['follow', 't2s', 's2t', 'off', 'pause']);
   assert.equal(select.value, 'follow');
+
+  select.value = 'pause'; // 临时暂停：不写存储
+  await select.fire('change');
+  assert.equal(api.effectiveState(), 'off');
+  assert.deepEqual(plain(storage.get('zh-t2s-site-preferences')), {});
+
+  select.value = 't2s'; // 从暂停切到具体方向：解除暂停并保存
+  await select.fire('change');
+  assert.equal(api.effectiveState(), 't2s');
+  assert.equal(storage.get('zh-t2s-site-preferences')['example.test'], 't2s');
+
   select.value = 'off';
   await select.fire('change');
   assert.equal(api.effectiveState(), 'off');
   assert.equal(storage.get('zh-t2s-site-preferences')['example.test'], 'off');
+});
+
+test('switching from pause to the saved preference reconverts the page', async () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const node = h.document.createTextNode('繁體');
+  h.document.documentElement.appendChild(node);
+  h.api.start();
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(node.nodeValue, '简体');
+
+  const panel = h.document.createElement('div');
+  h.api.renderSitePreferenceControl(panel);
+  const select = panel.children[0].children.find(child => child.nodeName === 'SELECT');
+  select.value = 'pause';
+  await select.fire('change');
+  assert.equal(node.nodeValue, '繁體', '暂停时还原原文');
+
+  select.value = 'follow'; // 与暂停前保存的偏好相同，仍然要重新转换
+  await select.fire('change');
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(node.nodeValue, '简体');
 });
 
 test('global selector changes only the global default and explains its scope', async () => {

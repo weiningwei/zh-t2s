@@ -587,6 +587,19 @@
     refreshMenu();
   }
 
+  /** 面板“此网站”下拉的统一入口：'pause' 只影响本次访问，其余写入站点偏好。 */
+  function setSiteMode(mode) {
+    if (mode === 'pause') {
+      if (!pagePaused) setPagePaused(true);
+      return;
+    }
+    if (!pagePaused) { setSitePreference(mode); return; }
+    // 暂停中选具体偏好：先解除暂停，再按新偏好转换一次（一次遍历，不来回翻）
+    pagePaused = false;
+    if (mode === sitePreference) { applyState('off', effectiveState()); refreshMenu(); return; }
+    setSitePreference(mode);
+  }
+
   function setPageState(direction) {
     if (pagePaused) setPagePaused(false);
     if (sitePreference === 'follow') setState(direction);
@@ -2393,14 +2406,17 @@
     title.appendChild(host);
     label.appendChild(title);
     label.appendChild(preferenceSelect('此网站的转换偏好', [
-      ['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']
-    ], sitePreference, setSitePreference, 'site'));
+      ['follow', '跟随全局'], ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换'],
+      ['pause', '仅本次访问（暂停）'] // 临时暂停：不写存储，刷新即恢复
+    ], pagePaused ? 'pause' : sitePreference, setSiteMode, 'site'));
     panel.appendChild(label);
     const hint = document.createElement('div');
     hint.className = 'zh-t2s-hint' + (sitePreferenceError ? ' error' : '');
-    hint.textContent = sitePreferenceError || (sitePreference === 'follow'
-      ? '当前随全局：' + ({ t2s: '繁→简', s2t: '简→繁', off: '不转换' })[state]
-      : '已保存，仅对此网站生效。');
+    hint.textContent = sitePreferenceError || (pagePaused
+      ? '本页暂停转换，刷新后按保存的偏好恢复；想长期关闭请选“不转换”。'
+      : sitePreference === 'follow'
+        ? '当前随全局：' + ({ t2s: '繁→简', s2t: '简→繁', off: '不转换' })[state]
+        : '已保存，仅对此网站生效。');
     hint.setAttribute('role', 'status');
     panel.appendChild(hint);
   }
@@ -2489,7 +2505,6 @@
     const site = document.createElement('div');
     site.className = 'zh-t2s-site-card';
     renderSitePreferenceControl(site);
-    site.appendChild(floatPanelRow(pagePaused ? '恢复本页转换' : '本页临时暂停 · 查看原文', () => setPagePaused(!pagePaused), { control: 'pause' }));
     floatPanel.appendChild(site);
     if (effectiveState() === 's2t') {
       const style = document.createElement('div');
