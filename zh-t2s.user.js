@@ -726,14 +726,19 @@
     if (shouldSkipElement(el, true)) return;
     let map = attrState.get(el);
     if (!map) { map = new Map(); attrState.set(el, map); }
+    // 还原用的原文表按需创建：多数元素最终没有可转换的属性，不必先分配一张空 Map
     let origMap = attrOriginal.get(el);
-    if (!origMap) { origMap = new Map(); attrOriginal.set(el, origMap); }
     for (const attr of convertibleAttrs(el)) {
       if (!el.hasAttribute(attr)) continue;
       const val = el.getAttribute(attr);
       if (val == null) continue;
       if (map.get(attr) === val) continue;              // 自己上次写入的值
-      if (!mayConvertText(val)) { map.set(attr, val); origMap.delete(attr); continue; }
+      if (!mayConvertText(val)) {
+        map.set(attr, val);
+        if (origMap) origMap.delete(attr);
+        continue;
+      }
+      if (!origMap) { origMap = new Map(); attrOriginal.set(el, origMap); }
       origMap.set(attr, val);                         // 页面最新原文
       const out = safeConvert(val);
       if (out !== val) {
