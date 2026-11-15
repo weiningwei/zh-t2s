@@ -844,6 +844,19 @@ test('startup converts a batch synchronously instead of waiting for an idle call
   assert.equal(text.nodeValue, '简体', '首屏在 start 时同步完成');
 });
 
+test('the tool dialog follows the dark preference', () => {
+  const light = loadUserscript();
+  light.api.openToolDialog('标题', '<p>说明</p>');
+  assert.equal(light.dialogs.at(-1).style.background, '#fff');
+
+  const dark = loadUserscript();
+  dark.setMedia('(prefers-color-scheme: dark)', true);
+  dark.api.openToolDialog('标题', '<p>说明</p>');
+  const dialog = dark.dialogs.at(-1);
+  assert.equal(dialog.style.background, '#1c1f26');
+  assert.equal(dialog.style.color, '#e6e8ee');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

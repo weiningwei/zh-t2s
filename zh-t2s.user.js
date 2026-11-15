@@ -1420,6 +1420,25 @@
 
   // 注入浮动 UI 样式表（唯一 class 前缀 zh-t2s-，不与页面样式冲突）。
   // 布局/定位用 class 保证不被页面 CSS 重置；hover/active/动画仅 class 可实现。
+  /** 读取系统偏好；不支持或读取失败一律按"否"处理。 */
+  function prefersMedia(query) {
+    try { return typeof window.matchMedia === 'function' && window.matchMedia(query).matches; }
+    catch (e) { return false; }
+  }
+  const prefersDark = () => prefersMedia('(prefers-color-scheme: dark)');
+  const prefersReducedMotion = () => prefersMedia('(prefers-reduced-motion: reduce)');
+
+  /** 弹窗容器（dialog 元素本身）的配色：跟随系统深色，否则保持浅色。 */
+  function dialogChrome() {
+    const dark = prefersDark();
+    return {
+      border: '1px solid ' + (dark ? '#2f353f' : '#dce2eb'),
+      background: dark ? '#1c1f26' : '#fff',
+      color: dark ? '#e6e8ee' : '#1f2329',
+      boxShadow: dark ? '0 16px 64px #000a' : '0 16px 64px #0005'
+    };
+  }
+
   function injectFloatStyles() {
     if (document.getElementById('zh-t2s-float-style')) return;
     const css = [
@@ -1471,7 +1490,29 @@
       '.zh-t2s-hint{font-size:12px;line-height:1.55;color:#6b7280;margin-top:7px;}',
       '.zh-t2s-hint.error{color:#b42318;}',
       '.zh-t2s-style{margin-top:12px;}',
-      '.zh-t2s-style .zh-t2s-field-title{font-size:12px;color:#596579;font-weight:400;}'
+      '.zh-t2s-style .zh-t2s-field-title{font-size:12px;color:#596579;font-weight:400;}',
+      // 深色系统下跟随配色，避免深色页面上弹出一块亮白面板
+      '@media (prefers-color-scheme: dark){',
+      '.zh-t2s-floatpanel{background:#1c1f26;color:#e6e8ee;border-color:#2f353f;box-shadow:0 12px 36px rgba(0,0,0,.6);color-scheme:dark;}',
+      '.zh-t2s-floatpanel select{background:#23262e;border-color:#3a4049;}',
+      '.zh-t2s-floatpanel .zh-t2s-row:hover,.zh-t2s-floatpanel .zh-t2s-close:hover{background:#2a303a;}',
+      '.zh-t2s-segments{background:#23262e;}',
+      '.zh-t2s-floatpanel .zh-t2s-seg{color:#b6bcc9;}',
+      '.zh-t2s-floatpanel .zh-t2s-seg:hover{background:#2f3540;}',
+      '.zh-t2s-floatpanel .zh-t2s-seg.active{background:#3a4150;color:#9dc0ff;box-shadow:none;}',
+      '.zh-t2s-divider{background:#2c313a;}',
+      '.zh-t2s-header .t{color:#e6e8ee;}',
+      '.zh-t2s-header .s,.zh-t2s-hint,.zh-t2s-host,.zh-t2s-floatpanel .zh-t2s-footer .zh-t2s-row{color:#a8afbc;}',
+      '.zh-t2s-hint.error,.zh-t2s-floatpanel .zh-t2s-footer .danger{color:#e06a70;}',
+      '.zh-t2s-version{color:#a8afbc;background:#272c36;}',
+      '.zh-t2s-site-card{background:#23262e;border-color:#333945;}',
+      '.zh-t2s-style .zh-t2s-field-title{color:#a8afbc;}',
+      '}',
+      // 系统要求减少动态效果时不做入场动画与过渡
+      '@media (prefers-reduced-motion: reduce){',
+      '.zh-t2s-floatpanel{animation:none;}',
+      '.zh-t2s-floatbtn{transition:none;}',
+      '}'
     ].join('\n');
     const style = document.createElement('style');
     style.id = 'zh-t2s-float-style';
@@ -1543,6 +1584,7 @@
     window.removeEventListener('resize', positionFloatPanel);
     const panel = floatPanel;
     floatPanel = null;
+    if (prefersReducedMotion()) { panel.remove(); return; } // 减少动态效果时直接收起
     panel.style.transition = 'opacity .12s ease, transform .12s ease';
     panel.style.opacity = '0';
     panel.style.transform = 'translateY(8px) scale(.96)';
@@ -1684,8 +1726,8 @@
     Object.assign(dialog.style, {
       position: 'fixed', inset: '0', margin: 'auto', width: '560px',
       maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
-      boxSizing: 'border-box', padding: '0', border: '1px solid #dce2eb', borderRadius: '14px',
-      background: '#fff', color: '#1f2329', boxShadow: '0 16px 64px #0005', overflow: 'auto'
+      boxSizing: 'border-box', padding: '0', borderRadius: '14px', ...dialogChrome(),
+      overflow: 'auto'
     });
     const host = document.createElement('div');
     dialog.appendChild(host);
@@ -1701,6 +1743,14 @@
       textarea,input[type="text"]{display:block;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:white}
       textarea{min-height:120px;resize:vertical}.actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:16px}
       .status{min-height:24px;color:#596579;white-space:pre-wrap;overflow-wrap:anywhere}.status[data-error="true"]{color:#b42318}
+      @media (prefers-color-scheme: dark){
+        .body{background:#1c1f26;color:#e6e8ee}h2{color:#e6e8ee}p,.status{color:#a8afbc}
+        .status[data-error="true"]{color:#e06a70}
+        button,input,textarea,select{color:#e6e8ee}
+        button,select{background:#23262e;border-color:#3a4049}
+        textarea,input[type="text"]{background:#23262e;border-color:#3a4049}
+        .primary{background:#2f6bff;color:#fff;border-color:#2f6bff}
+      }
     </style><div class="body"><h2></h2>${contentHTML}<div class="status" role="status" aria-live="polite"></div></div>`;
     root.querySelector('h2').textContent = title;
     const status = root.querySelector('.status');
@@ -1968,8 +2018,8 @@
     Object.assign(dialog.style, {
       position: 'fixed', inset: '0', margin: 'auto',
       width: '560px', maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100dvh - 32px)',
-      boxSizing: 'border-box', padding: '0', border: '1px solid #dce2eb', borderRadius: '14px',
-      background: '#fff', color: '#1f2329', boxShadow: '0 16px 64px #0005', overflow: 'auto'
+      boxSizing: 'border-box', padding: '0', borderRadius: '14px', ...dialogChrome(),
+      overflow: 'auto'
     });
     const host = document.createElement('div');
     dialog.appendChild(host);
@@ -1990,6 +2040,14 @@
         .preview input{display:block;width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif;color:#1f2329;background:#fff}
         .preview-out{margin-top:6px;padding:8px 10px;border:1px dashed #d4dce8;border-radius:8px;background:#f9fbff;min-height:20px;font-size:13px;color:#263449;word-break:break-word}
         .actions{justify-content:flex-end}.hint{font-size:12px}
+        @media (prefers-color-scheme: dark){
+          .body{background:#1c1f26;color:#e6e8ee}h2{color:#e6e8ee}p,.status{color:#a8afbc}
+          .status[data-error="true"]{color:#e06a70}
+          button{background:#23262e;border-color:#3a4049;color:#e6e8ee}
+          button[aria-pressed="true"],.save{background:#2f6bff;color:#fff;border-color:#2f6bff}
+          textarea,.preview input{background:#23262e;border-color:#3a4049;color:#e6e8ee}
+          .preview-out{background:#23262e;border-color:#3a4049;color:#e6e8ee}
+        }
       </style>
       <div class="body">
         <h2>自定义词典</h2>

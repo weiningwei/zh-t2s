@@ -18,6 +18,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   storage.set('zh-t2s-floatbtn', false);
   const observations = [];
   const mutationCallbacks = new Set();
+  const mediaMatches = new Set();
   const timers = new Map();
   const dialogs = [];
   const downloads = [];
@@ -214,6 +215,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     // 不测 OpenCC 自身的字形字典；用恒等转换器隔离脚本的自定义规则行为。
     OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined,
     confirm(message) { confirmations.push(message); return confirmation; },
+    // 媒体查询：默认全部不匹配，用例用 setMedia 打开需要的偏好
+    matchMedia(query) { return { matches: mediaMatches.has(query) }; },
     setTimeout: sandbox.setTimeout
   };
   // 视口状态收在一处，由 setViewport 同时同步 window 字段与 elementFromPoint，
@@ -246,7 +249,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   })();`), sandbox, { filename: 'zh-t2s.user.js', timeout: 1000 });
 
   return {
-    api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations,
+    api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations, dialogs,
     // 视口：提供 at（视口中心命中的元素）时页面必须已经离开顶部——文档滚动或
     // 内层容器滚动，否则脚本会跳过视口优先分支，用例会得到"什么都没发生"的假象。
     setViewport({ scrollY = 0, width = 1024, height = 768, at = null } = {}) {
@@ -265,6 +268,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     receiveBroadcast(data) { receiveBroadcast({ data }); },
     // 把一批变更记录交给脚本的观察者回调（桩不模拟真实调度）
     emitMutations(mutations) { mutationCallbacks.forEach((callback) => callback(mutations)); },
+    setMedia(query, matches) { if (matches) mediaMatches.add(query); else mediaMatches.delete(query); },
     failWrites(error) { writeError = error; },
     failReads(error) { readError = error; },
     setConfirmation(value) { confirmation = value; },
