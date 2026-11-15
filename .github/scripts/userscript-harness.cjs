@@ -54,10 +54,13 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       this.listeners = new Map();
       this.children = [];
       this.parentElement = null;
-      this.className = '';
       this.value = this.textContent = '';
       this.isConnected = true;
     }
+    // class 与 class 属性保持同一份数据：脚本既用 classList 判定忽略区域，
+    // 也用 getAttribute('class') 判断类名变化。
+    get className() { return this.attributes.get('class') || ''; }
+    set className(value) { this.attributes.set('class', value); }
     addEventListener(name, callback) {
       if (!this.listeners.has(name)) this.listeners.set(name, []);
       this.listeners.get(name).push(callback);

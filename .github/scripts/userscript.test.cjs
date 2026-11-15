@@ -643,6 +643,23 @@ test('converted text moved into an ignored region is restored', () => {
   assert.equal(text.nodeValue, '繁體');
 });
 
+test('adding .ignore-opencc through a mutation still restores the converted subtree', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const region = h.document.createElement('div');
+  const text = h.document.createTextNode('繁體');
+  region.appendChild(text);
+  h.document.documentElement.appendChild(region);
+
+  h.api.enqueueSubtree(h.document.documentElement);
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(text.nodeValue, '简体');
+
+  region.className = 'ignore-opencc';
+  h.emitMutations([{ type: 'attributes', attributeName: 'class', target: region, oldValue: '' }]);
+  for (const [, timer] of [...h.timers]) if (timer.delay === 0) timer.fn();
+  assert.equal(text.nodeValue, '繁體', '忽略根仍按写入记录还原');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

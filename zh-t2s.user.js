@@ -623,14 +623,18 @@
     return ATTR_ONLY_TAGS.has(tagKey(el));
   }
 
+  /** 是否是 .ignore-opencc 忽略区域；逐祖先判定而不用 closest，因为 closest 不跨越 shadow 边界。 */
+  function hasIgnoreClass(el) {
+    return !!(el.classList && el.classList.contains('ignore-opencc'));
+  }
+
   /** 文本与属性共用的元素边界，包含所有被排除的祖先（含 shadow 宿主）。
    *  forAttributes 为 true 时，只跳过内容、允许转换自身属性的标签（输入框／文本域）
    *  不算排除，其余规则不变。 */
   function shouldSkipElement(el, forAttributes = false) {
     for (let ancestor = el; ancestor; ancestor = ancestorOf(ancestor)) {
       if (isSkipTag(ancestor) && !(forAttributes && ancestor === el && allowsOwnAttributes(ancestor))) return true;
-      // .ignore-opencc 逐个祖先实时判定，兼容类名变更与节点移动；closest 不跨越 shadow 边界
-      if (ancestor.classList && ancestor.classList.contains('ignore-opencc')) return true;
+      if (hasIgnoreClass(ancestor)) return true;
       // 标签规则按大写比较：SVG／MathML 等外来元素的 nodeName 保留原本大小写。
       if (ignoreRules.length && ((ignoreTags.size && ignoreTags.has(ancestor.nodeName.toUpperCase())) ||
           ignoreIds.has(ancestor.getAttribute('id')) ||
@@ -764,7 +768,7 @@
    *  - 属性元素：querySelectorAll 一次性查询（浏览器原生 C++ 实现，远快于 JS 逐元素 hasAttribute）
    *    队列规模大幅缩小，去掉 90%+ 无目标属性的 Element 节点
    */
-  function enqueueSubtree(root) {
+  function enqueueSubtree(root, includeIgnored = false) {
     if (!root) return;
     const t = root.nodeType;
     if (t === Node.TEXT_NODE) { queue.add(root); return; }
@@ -773,6 +777,9 @@
       if (allowsOwnAttributes(root)) queue.add(root); // 表单元素自身的显示属性仍要转换
       return; // 整棵子树跳过
     }
+    // 根本身就在忽略区域里（含脚本自己的面板）时整棵不展开。类名刚加上时需要走一遍，
+    // 把此前转换过的内容还原，那种调用传 includeIgnored。
+    if (!includeIgnored && t === Node.ELEMENT_NODE && hasIgnoreClass(root)) return;
 
     // 1) Text 节点与 shadow 宿主：一次遍历同时收集
     //   TEXT_FILTER 复用了 CJK 预检 + shouldSkipText；TreeWalker 不进入 shadow 树，
@@ -913,7 +920,7 @@
   function inOwnUi(target) {
     if (!target) return false;
     for (let node = target; node; node = ancestorOf(node)) {
-      if (node.classList && node.classList.contains('ignore-opencc')) return true;
+      if (hasIgnoreClass(node)) return true;
     }
     return false;
   }
@@ -950,7 +957,7 @@
           const before = m.oldValue || '';
           if (m.attributeName === 'class') {
             // .ignore-opencc 变化时重扫：新标记的区域还原原文，移除标记的区域重新转换
-            if (before.includes('ignore-opencc') !== now.includes('ignore-opencc')) { enqueueSubtree(m.target); continue; }
+            if (before.includes('ignore-opencc') !== now.includes('ignore-opencc')) { enqueueSubtree(m.target, true); continue; }
             if (!ignoreClasses.size) continue;
             if (before.split(/\s+/).some((name) => ignoreClasses.has(name)) !==
                 now.split(/\s+/).some((name) => ignoreClasses.has(name))) enqueueSubtree(m.target);
