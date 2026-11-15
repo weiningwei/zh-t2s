@@ -665,6 +665,8 @@
   // Unicode Han 覆盖扩展区生僻字；有词典时也检查原词首字符，支持非汉字规则。
   // 未配置非汉字开头的规则时，纯 ASCII 文本无需逐字符检查词典。
   const HAS_CJK = /\p{Script=Han}/u;
+  // 判空不用 trim()：那会为每个文本节点复制一份字符串，正则只做一次扫描
+  const HAS_NON_SPACE = /\S/;
 
   function mayConvertText(text) {
     if (HAS_CJK.test(text)) return true;
@@ -682,8 +684,9 @@
     acceptNode(node) {
       // 已转换过的节点即使落在排除区域也放行，交给 processQueue 还原原文
       if (textOriginal.has(node) && node.parentElement && shouldSkipElement(node.parentElement)) return NodeFilter.FILTER_ACCEPT;
-      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-      if (!mayConvertText(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+      const value = node.nodeValue;
+      if (!value || !HAS_NON_SPACE.test(value)) return NodeFilter.FILTER_REJECT;
+      if (!mayConvertText(value)) return NodeFilter.FILTER_REJECT;
       if (shouldSkipText(node)) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     }
