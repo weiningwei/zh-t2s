@@ -818,14 +818,27 @@
     try { return el.getBoundingClientRect().height > maxHeight; } catch (e) { return false; }
   }
 
+  /** 是否已经离开文档顶部：文档滚动，或内层滚动容器滚过都算。
+   *  SPA 常见 body{overflow:hidden} + 内部容器滚动，此时 window.scrollY 恒为 0。 */
+  function leftDocumentTop(el) {
+    if (window.scrollY > 0) return true;
+    for (let node = el; node; node = node.parentElement) {
+      if (node.scrollTop > 0) return true;
+    }
+    return false;
+  }
+
   /** 视口优先：刷新保留滚动位置、锚点跳转或 SPA 路由后，用户眼前的内容在文档里
    *  可能靠后，按文档顺序会排到队尾。队列是 Set（保序），先入队的先转换，
    *  所以这里把视口中心附近的两三层祖先先入队。 */
   function enqueueViewportHint() {
-    if (!(window.scrollY > 0) || typeof document.elementFromPoint !== 'function') return;
+    if (typeof document.elementFromPoint !== 'function') return;
     let el = null;
     try { el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2); }
     catch (e) { return; } // 参数不合法或环境不支持时放弃
+    if (!el || el === document.body || el === document.documentElement) return;
+    // 停在顶部时文档顺序本来就等于视口顺序；但"顶部"要同时看文档滚动与内层容器滚动
+    if (!leftDocumentTop(el)) return;
     const maxHeight = (Number(window.innerHeight) || 0) * VIEWPORT_HINT_SCREENS;
     // 从命中元素往上取三层：最内层是“这一段”，上面两层覆盖到卡片 / 评论
     for (let depth = 0; depth < VIEWPORT_HINT_DEPTH && el && el !== document.body && el !== document.documentElement;

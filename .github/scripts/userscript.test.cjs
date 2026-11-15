@@ -784,6 +784,31 @@ test('the viewport hint stops climbing once an ancestor towers over the screen',
   assert.ok(mainTexts.some((text) => text.nodeValue === '繁體'), '超出两屏的容器靠后处理');
 });
 
+test('the viewport hint still runs when only an inner container is scrolled', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const big = h.document.createElement('div');
+  const bigTexts = [];
+  for (let i = 0; i < 400; i++) {
+    const text = h.document.createTextNode('繁體');
+    bigTexts.push(text);
+    big.appendChild(text);
+  }
+  const scroller = h.document.createElement('div');
+  scroller.scrollTop = 300; // body 没滚动，滚动发生在这个内层容器里
+  const inner = h.document.createElement('p');
+  const innerText = h.document.createTextNode('繁體');
+  inner.appendChild(innerText);
+  scroller.appendChild(inner);
+  h.document.documentElement.appendChild(big);
+  h.document.documentElement.appendChild(scroller);
+
+  h.setViewport({ scrollY: 0, at: inner });
+  h.api.start();
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(innerText.nodeValue, '简体', '内层容器滚过也算离开顶部');
+  assert.ok(bigTexts.some((text) => text.nodeValue === '繁體'));
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

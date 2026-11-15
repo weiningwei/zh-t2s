@@ -247,10 +247,12 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
 
   return {
     api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations,
-    // 视口：提供 at（视口中心命中的元素）时必须同时给出 scrollY > 0，
-    // 否则脚本在页面顶部会跳过视口优先分支，用例会得到"什么都没发生"的假象。
+    // 视口：提供 at（视口中心命中的元素）时页面必须已经离开顶部——文档滚动或
+    // 内层容器滚动，否则脚本会跳过视口优先分支，用例会得到"什么都没发生"的假象。
     setViewport({ scrollY = 0, width = 1024, height = 768, at = null } = {}) {
-      assert.ok(!(at && scrollY <= 0), '提供 at 时 scrollY 必须大于 0');
+      let scrolled = scrollY > 0;
+      for (let node = at; !scrolled && node; node = node.parentElement) scrolled = node.scrollTop > 0;
+      assert.ok(!(at && !scrolled), '提供 at 时页面需已滚动（scrollY 或任一祖先 scrollTop）');
       Object.assign(viewport, { scrollY, width, height, at });
       applyViewport();
     },
