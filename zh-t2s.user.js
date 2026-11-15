@@ -909,7 +909,9 @@
    *   - 被框架回写为原文（繁体）的节点会被重新转换，正好修复「展开后繁体未转」的问题。
    */
   let rescanTimer = null;
+  let lastRescanAt = 0;
   const RESCAN_DELAY = 160; // 等框架完成 DOM 更新后再扫，避免扫描到更新前的临时状态
+  const RESCAN_MIN_INTERVAL = 1000; // 全量扫描的最小间隔：延迟而不是丢弃，兜底不会漏扫
   function rescanDocument() {
     if (effectiveState() === 'off') return; // 关闭/站点停用/无 opencc 时不扫
     enqueueSubtree(document.documentElement);
@@ -928,7 +930,14 @@
   function scheduleRescan(event) {
     if (inOwnUi(event && event.target)) return; // 自己的面板不会产生需要转换的内容
     if (rescanTimer != null) clearTimeout(rescanTimer);
-    rescanTimer = setTimeout(() => { rescanTimer = null; rescanDocument(); }, RESCAN_DELAY);
+    // 距上次全量扫描不足 1s 时延后到满 1s 再扫一次：连续点击只会触发一次全量遍历，
+    // 但那次一定会执行，不丢兜底。
+    const wait = Math.max(RESCAN_DELAY, lastRescanAt + RESCAN_MIN_INTERVAL - Date.now());
+    rescanTimer = setTimeout(() => {
+      rescanTimer = null;
+      lastRescanAt = Date.now();
+      rescanDocument();
+    }, wait);
   }
 
   /* ============================================================

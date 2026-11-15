@@ -660,6 +660,22 @@ test('adding .ignore-opencc through a mutation still restores the converted subt
   assert.equal(text.nodeValue, '繁體', '忽略根仍按写入记录还原');
 });
 
+test('the click rescan is deferred to one full scan per second instead of being dropped', async () => {
+  const h = loadUserscript();
+  const page = h.document.createElement('div');
+  h.document.documentElement.appendChild(page);
+
+  await h.document.fire('click', { target: page });
+  const first = [...h.timers.values()].filter(timer => timer.delay >= 160).at(-1);
+  assert.equal(first.delay, 160, '首次点击按防抖延迟扫描');
+  for (const [id, timer] of [...h.timers]) if (timer === first) { h.timers.delete(id); timer.fn(); }
+
+  await h.document.fire('click', { target: page });
+  const second = [...h.timers.values()].filter(timer => timer.delay >= 160).at(-1);
+  assert.ok(second.delay > 160, '刚扫过不足 1s，延后执行而不是丢弃');
+  assert.ok(second.delay <= 1000);
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
