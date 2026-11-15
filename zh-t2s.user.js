@@ -329,15 +329,23 @@
     refreshMenu();
   }
 
+  /** 读取并校验一个 GM 值：环境不支持或校验失败时告警并返回 onFailure，调用方不必再包 try */
+  function readStored({ key, defaultValue, onFailure, validate, label }) {
+    try {
+      if (typeof GM_getValue !== 'function') return onFailure;
+      return validate(GM_getValue(key, defaultValue));
+    } catch (e) {
+      if (label) console.warn('[zh-t2s] ' + label + '读取失败。', e);
+      return onFailure;
+    }
+  }
+
   /** 读取存储中的词典；不可用或校验失败时返回 null */
   function readStoredDictionary() {
-    try {
-      if (typeof GM_getValue !== 'function') return null;
-      return validateDictionary(GM_getValue(DICTIONARY_KEY, dictionary));
-    } catch (e) {
-      console.warn('[zh-t2s] 自定义词典读取失败。', e);
-      return null;
-    }
+    return readStored({
+      key: DICTIONARY_KEY, defaultValue: dictionary, onFailure: null,
+      validate: validateDictionary, label: '自定义词典'
+    });
   }
 
   /** 切回前台或打开词典编辑器时，读取最新词典并按需重扫 */
@@ -389,10 +397,10 @@
 
   function readShortcutConfig(direction) {
     const fallback = SHORTCUT_DEFAULT[direction];
-    try {
-      if (typeof GM_getValue !== 'function') return { ...fallback };
-      return normalizeShortcutConfig(GM_getValue(SHORTCUT_STORAGE[direction], null), fallback);
-    } catch (e) { return { ...fallback }; }
+    return readStored({
+      key: SHORTCUT_STORAGE[direction], defaultValue: null, onFailure: { ...fallback },
+      validate: (value) => normalizeShortcutConfig(value, fallback), label: ''
+    });
   }
 
   function shortcutFor(direction) { return direction === 't2s' ? shortcutT2S : shortcutS2T; }
