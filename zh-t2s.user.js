@@ -1186,9 +1186,9 @@
       observer.observe(document.documentElement, options);
       shadowRoots.forEach((root) => shadowObserver.observe(root, options));
       reconvertAll();
-      // 还没参与过转换的节点（新内容、刚从排除区域放出来）仍需扫一次；已重写的节点
-      // 在队列里被 textState 守卫 O(1) 跳过。
-      enqueueDocument();
+      // 还没参与过转换的节点（新内容、刚从排除区域放出来）仍需扫一次；刚全部重写过，
+      // 不必再按视口排序，普通全量扫描即可（省掉几次子树遍历）。
+      enqueueSubtree(document.documentElement);
       scheduleIdle();
     } else if (!wasActive && isActive && hasOpenCC) {
       // 从关闭到开启（同方向）
