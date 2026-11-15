@@ -743,8 +743,7 @@ test('the initial scan converts what is inside the viewport first', () => {
 
   h.setViewport({ scrollY: 600, at: bottom }); // 用户停在页面中部，视口中心命中底部段落
 
-  h.api.start();
-  h.api.processQueue({ timeRemaining: () => 10 }); // 只处理一批（CHUNK_SIZE）
+  h.api.start(); // 启动时同步处理一批，其余交给空闲分片
   assert.equal(bottomText.nodeValue, '简体', '视口内的内容排到队首');
   assert.ok(topTexts.some((text) => text.nodeValue === '繁體'), '屏外内容稍后转换');
 
@@ -776,8 +775,7 @@ test('the viewport hint stops climbing once an ancestor towers over the screen',
   h.document.documentElement.appendChild(main);
 
   h.setViewport({ scrollY: 500, at: paragraph });
-  h.api.start();
-  h.api.processQueue({ timeRemaining: () => 10 });
+  h.api.start(); // 启动时同步处理一批
 
   assert.equal(focusText.nodeValue, '简体', '命中元素自身仍然优先');
   assert.equal(asideText.nodeValue, '简体', '没有把整页级容器抢到队首，视口内其他内容照常靠前');
@@ -803,8 +801,7 @@ test('the viewport hint still runs when only an inner container is scrolled', ()
   h.document.documentElement.appendChild(scroller);
 
   h.setViewport({ scrollY: 0, at: inner });
-  h.api.start();
-  h.api.processQueue({ timeRemaining: () => 10 });
+  h.api.start(); // 启动时同步处理一批
   assert.equal(innerText.nodeValue, '简体', '内层容器滚过也算离开顶部');
   assert.ok(bigTexts.some((text) => text.nodeValue === '繁體'));
 });
@@ -834,6 +831,17 @@ test('the click rescan also starts from the viewport', async () => {
   h.api.processQueue({ timeRemaining: () => 10 });
   assert.equal(tailText.nodeValue, '简体', '重扫也从视口开始');
   assert.ok(bigTexts.some((text) => text.nodeValue === '繁體'));
+});
+
+test('startup converts a batch synchronously instead of waiting for an idle callback', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const paragraph = h.document.createElement('p');
+  const text = h.document.createTextNode('繁體');
+  paragraph.appendChild(text);
+  h.document.documentElement.appendChild(paragraph);
+
+  h.api.start(); // 不触发任何空闲回调
+  assert.equal(text.nodeValue, '简体', '首屏在 start 时同步完成');
 });
 
 test('all separators, whitespace and missing separators', () => {

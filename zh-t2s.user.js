@@ -102,6 +102,7 @@
    * ============================================================ */
   const IDLE_TIMEOUT = 2000; // requestIdleCallback 兜底超时（ms），保证不会一直不执行
   const CHUNK_SIZE = 300;    // 每个空闲帧最多处理的节点数，防止长时间占用主线程
+  const START_BATCH_BUDGET = 8; // 启动时同步处理的首屏预算（ms），避免忙页面等满空闲超时
 
   // 不转换其内部内容的元素（防止破坏页面功能）
   // - script/style/noscript：代码与样式
@@ -947,6 +948,14 @@
         refreshMenu();
       }
     }
+  }
+
+  /** 启动时同步处理一小批：页面繁忙时空闲回调最坏要等满 timeout（2s），
+   *  首屏会一直停在繁体。这里先按时间预算就地转一批，其余照旧走空闲分批。 */
+  function flushFirstBatch(budgetMs) {
+    if (!queue.size) return;
+    const started = performance.now();
+    processQueue({ timeRemaining: () => budgetMs - (performance.now() - started) });
   }
 
   /* ============================================================
@@ -2370,6 +2379,7 @@
       // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）；
       // 用户停在页面中部时先把视口附近的内容排到队首
       enqueueDocument();
+      flushFirstBatch(START_BATCH_BUDGET); // 首屏立刻转换，不必等空闲回调
       scheduleIdle();
     }
     registerMenu(); // 无论站点停用/关闭/无 opencc 状态都注册菜单，供用户管理
