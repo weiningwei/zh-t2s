@@ -44,7 +44,9 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 
 ## 浮动面板
 
-保持扁平布局，依次为当前页状态、此网站偏好、全局默认、自定义词典和底部维护操作。站点设置使用独立卡片强调作用范围；繁体字形只在当前页简→繁时显示，并明确为所有网站共用。
+主面板只放常用项，依次为：状态头（当前方向、字数/耗时、版本号、关闭）、此网站偏好卡片（含“本页临时暂停”）、繁体字形（仅当前页简→繁时出现）、全局默认、自定义词典、快捷键摘要、更多工具。站点设置使用独立卡片强调作用范围；繁体字形明确为所有网站共用。
+
+快捷键默认收起为一行摘要（`▸ 快捷键 · F8 / F9`），点开才是两个方向的录制行与规则提示；录制状态 `shortcutCapture` 由 `keydown` 捕获阶段独占，面板关闭时清空。低频操作——忽略区域、站点词典、选中文字转换、站点偏好管理、备份与恢复、隐藏浮动按钮、重置——统一收进 `openMoreTools()` 的二级弹窗，与其它工具共用 `openToolDialog` 容器，不叠加浮层。
 
 `preferenceSelect` 统一构建原生选择控件，站点与全局分别调用各自的保存入口。`positionFloatPanel` 在内容重绘和窗口 resize 后重新定位，选择按钮上方或下方更大的空间，限制最大高度并允许滚动。关闭面板时移除窗口与键盘监听。设置重绘通过 `data-control` 还原焦点并保留滚动位置；Esc 关闭后将焦点返回原生浮动按钮。
 
@@ -56,13 +58,14 @@ node --test .github/scripts/userscript.test.cjs .github/scripts/version-policy.t
 | 繁体字形 | `zh-t2s-traditional-style` | 同源 BroadcastChannel；其他站点刷新后读取 |
 | 自定义词典 | `zh-t2s-dictionary` | 切回前台或打开编辑器时读存储，保存前检查冲突 |
 | 站点偏好 | `zh-t2s-site-preferences` | 当前页立即生效，同源广播通知读存储，切回前台时重新读取 |
+| 快捷键 | `zh-t2s-shortcut-t2s`、`zh-t2s-shortcut-s2t` | 同源 BroadcastChannel；其他站点切回前台时读取 |
 | 按钮显隐／位置 | `zh-t2s-floatbtn`、`zh-t2s-floatpos` | 当前页立即生效，其他页面刷新后读取 |
 
 站点偏好格式为 `{ "example.com": "follow" | "t2s" | "s2t" | "off" }`，按 hostname 精确匹配，优先于全局 `state`。转换器、词典预检与匹配、字形变更、扫描和面板状态均使用 `effectiveState()`。菜单和面板“全局默认”修改全局设置；快捷键和按钮右键通过 `setPageState()` 沿用当前范围。
 
 读取站点偏好时先将旧 `zh-t2s-whitelist` 合并为 `off`，再覆盖新设置，显式 `follow` 可解除旧排除项；首次保存会将合并后的配置持久化。保存前重读其他网站配置，写入成功后才切换当前页状态；重置同时清空新旧存储。测试覆盖站点方向与词典、开关还原、刷新持久化、精确域名、旧数据兼容、保存失败、同步及选择控件。
 
-词典格式为 `{ t2s: [[source, target]], s2t: [[source, target]] }`，与 JSON 导入导出一致。快捷键仍读取 `zh-t2s-shortcut-t2s/s2t` 兼容旧偏好，当前无配置入口。
+词典格式为 `{ t2s: [[source, target]], s2t: [[source, target]] }`，与 JSON 导入导出一致。快捷键格式为 `{ key, ctrl, alt, shift, meta }`，在面板“快捷键”里录制后立即写回并广播；F1–F12 可单独使用，其他按键必须带 Ctrl／Alt／Cmd，两个方向不可重复。
 
 ## 修改运行范围与调度
 
