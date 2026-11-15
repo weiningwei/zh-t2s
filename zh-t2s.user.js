@@ -118,6 +118,8 @@
   // 需要转换的可见文本属性
   // data-placeholder：部分框架/编辑器用该属性 + CSS content:attr() 渲染占位提示（如 Slate、Quill 定制主题）
   const CONVERTIBLE_ATTRS = ['placeholder', 'data-placeholder', 'title', 'alt', 'aria-label'];
+  // 收集以上属性的选择器：由清单生成，避免入队查询与转换清单两处漂移
+  const ATTR_SELECTOR = CONVERTIBLE_ATTRS.map((attr) => '[' + attr + ']').join(',');
 
   // 浮动状态按钮（页面内可见开关，默认显示，可在油猴菜单关闭）
   // 仅顶层框架创建；按钮自身带 .ignore-opencc，且用内联样式隔离页面 CSS。
@@ -745,7 +747,6 @@
     }
 
     // 2) 属性元素：原生选择器一次性查询（包含 root 自身若命中）
-    const ATTR_SELECTOR = '[placeholder],[data-placeholder],[title],[alt],[aria-label]';
     try {
       if (t === Node.ELEMENT_NODE && root.matches?.(ATTR_SELECTOR)) queue.add(root);
       root.querySelectorAll?.(ATTR_SELECTOR).forEach((el) => {
