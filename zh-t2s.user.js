@@ -899,7 +899,18 @@
     enqueueSubtree(document.documentElement);
     scheduleIdle();
   }
-  function scheduleRescan() {
+  /** 点击是否发生在脚本自己的界面里：面板在 light DOM，弹窗内容在 shadow 树内，
+   *  所以沿祖先链（含 shadow 宿主）找 .ignore-opencc。 */
+  function inOwnUi(target) {
+    if (!target) return false;
+    for (let node = target; node; node = ancestorOf(node)) {
+      if (node.classList && node.classList.contains('ignore-opencc')) return true;
+    }
+    return false;
+  }
+
+  function scheduleRescan(event) {
+    if (inOwnUi(event && event.target)) return; // 自己的面板不会产生需要转换的内容
     if (rescanTimer != null) clearTimeout(rescanTimer);
     rescanTimer = setTimeout(() => { rescanTimer = null; rescanDocument(); }, RESCAN_DELAY);
   }

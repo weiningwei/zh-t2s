@@ -589,6 +589,22 @@ test('the observer watches class changes so dynamic ignore regions are rescanned
   assert.equal(options.attributeOldValue, true);
 });
 
+test('clicks inside the script UI skip the whole-document rescan', async () => {
+  const h = loadUserscript();
+  const panel = h.document.createElement('div');
+  panel.className = 'ignore-opencc';
+  const button = h.document.createElement('button');
+  panel.appendChild(button);
+  h.document.documentElement.appendChild(panel);
+  const rescans = () => [...h.timers.values()].filter(timer => timer.delay === 160).length;
+
+  await h.document.fire('click', { target: button });
+  assert.equal(rescans(), 0, '面板内点击不重扫');
+
+  await h.document.fire('click', { target: h.document.createElement('div') });
+  assert.equal(rescans(), 1, '普通点击仍然重扫');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
