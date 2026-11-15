@@ -1174,21 +1174,26 @@
     attrOriginal.delete(el);
   }
 
-  /** 遍历一个根（文档或 shadow 根），把曾被转换过的节点还原为原始值 */
-  function restoreIn(root) {
-    // 节点可能在转换后移入排除区域；按写入记录还原，不按当前祖先剪枝。
+  /** 遍历一个根（文档或 shadow 根）的文本与元素，逐个交给处理函数。
+   *  还原与按原文重写共用这一套遍历，差别只在处理函数。 */
+  function walkDom(root, onText, onElement) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
     while (walker.nextNode()) {
-      const n = walker.currentNode;
-      if (n.nodeType === Node.TEXT_NODE) restoreTextNode(n);
-      else if (n.nodeType === Node.ELEMENT_NODE) restoreAttributes(n);
+      const node = walker.currentNode;
+      if (node.nodeType === Node.TEXT_NODE) onText(node);
+      else if (node.nodeType === Node.ELEMENT_NODE) onElement(node);
     }
   }
 
-  /** 关闭转换时遍历整棵 DOM（含已登记的 shadow 根），还原为原始值 */
+  /** 遍历整篇文档与所有已登记的 shadow 根（TreeWalker 不进入 shadow 树，需逐个补充） */
+  function walkAllRoots(onText, onElement) {
+    walkDom(document.documentElement, onText, onElement);
+    shadowRoots.forEach((root) => walkDom(root, onText, onElement));
+  }
+
+  /** 关闭转换时按写入记录还原原文（不按当前祖先剪枝：节点可能已移入排除区域） */
   function restoreAll() {
-    restoreIn(document.documentElement);
-    shadowRoots.forEach(restoreIn); // 文档遍历不进入 shadow 树，需逐个补充
+    walkAllRoots(restoreTextNode, restoreAttributes);
   }
 
   /* 方向／字形／词典变化时的重写：按记录的原文算出新结果、只写一次。
@@ -1225,19 +1230,8 @@
     }
   }
 
-  /** 遍历一个根（文档或 shadow 根），按原文重写转换结果 */
-  function rewriteIn(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
-    while (walker.nextNode()) {
-      const n = walker.currentNode;
-      if (n.nodeType === Node.TEXT_NODE) rewriteTextNode(n);
-      else if (n.nodeType === Node.ELEMENT_NODE) rewriteAttributes(n);
-    }
-  }
-
   function reconvertAll() {
-    rewriteIn(document.documentElement);
-    shadowRoots.forEach(rewriteIn); // 文档遍历不进入 shadow 树，需逐个补充
+    walkAllRoots(rewriteTextNode, rewriteAttributes);
   }
 
   /** 应用状态转移（不写存储、不广播，仅做实际工作） */
