@@ -642,12 +642,14 @@
   /** 该文本节点是否正处于用户编辑中的可编辑区域（避免打断输入） */
   function inActiveEditable(node) {
     const el = node.parentElement;
+    // 先用原生 isContentEditable 排除绝大多数节点：取所在根的活动元素要跨树查找，
+    // 不该为每个文本节点都付这份开销。
+    if (!el || !el.isContentEditable) return false;
     // 焦点在 shadow 树内时 document.activeElement 只是宿主元素，取节点所在根的活动元素
-    const root = typeof el?.getRootNode === 'function' ? el.getRootNode() : document;
+    const root = typeof el.getRootNode === 'function' ? el.getRootNode() : document;
     const ae = root.activeElement || document.activeElement;
-    // 用原生 isContentEditable 快速判定，再用包含关系覆盖 contenteditable 内的嵌套元素。
-    return !!el && !!ae && el.isContentEditable &&
-      (el === ae || el.contains(ae) || (ae.isContentEditable && ae.contains(el)));
+    // 再用包含关系覆盖 contenteditable 内的嵌套元素。
+    return !!ae && (el === ae || el.contains(ae) || (ae.isContentEditable && ae.contains(el)));
   }
 
   /** 文本节点是否应被跳过 */
