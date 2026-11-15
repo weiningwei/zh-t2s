@@ -521,6 +521,26 @@ test('input and textarea convert their display attributes but keep user content 
   assert.equal(textarea.getAttribute('placeholder'), '繁體佔位');
 });
 
+test('button-type input converts its value label while text input values stay untouched', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const submit = document.createElement('input');
+  submit.setAttribute('type', 'submit');
+  submit.setAttribute('value', '繁體送出');
+  const text = document.createElement('input');
+  text.setAttribute('type', 'text');
+  text.setAttribute('value', '繁體輸入值');
+  document.documentElement.appendChild(submit);
+  document.documentElement.appendChild(text);
+
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  assert.equal(submit.getAttribute('value'), '简体送出');
+  assert.equal(text.getAttribute('value'), '繁體輸入值');
+
+  api.setState('off');
+  assert.equal(submit.getAttribute('value'), '繁體送出');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

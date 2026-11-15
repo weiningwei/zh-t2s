@@ -125,6 +125,11 @@
   // 收集以上属性的选择器：由清单生成，避免入队查询与转换清单两处漂移
   const ATTR_SELECTOR = CONVERTIBLE_ATTRS.map((attr) => '[' + attr + ']').join(',');
 
+  // 按钮类 input 的可见文字在 value 上（type=text 等的 value 是用户输入与表单默认值，不处理）
+  const BUTTON_INPUT_TYPES = new Set(['button', 'submit', 'reset', 'image']);
+  const BUTTON_INPUT_SELECTOR = [...BUTTON_INPUT_TYPES].map((type) => 'input[type="' + type + '"]').join(',');
+  const COLLECT_SELECTOR = ATTR_SELECTOR + ',' + BUTTON_INPUT_SELECTOR;
+
   // 浮动状态按钮（页面内可见开关，默认显示，可在油猴菜单关闭）
   // 仅顶层框架创建；按钮自身带 .ignore-opencc，且用内联样式隔离页面 CSS。
   const FLOAT_BTN_KEY = 'zh-t2s-floatbtn';
@@ -702,13 +707,20 @@
     }
   }
 
+  /** 本次要转换的属性：按钮类 input 额外包含可见的 value 文案。 */
+  function convertibleAttrs(el) {
+    if (tagKey(el) !== 'INPUT') return CONVERTIBLE_ATTRS;
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    return BUTTON_INPUT_TYPES.has(type) ? CONVERTIBLE_ATTRS.concat('value') : CONVERTIBLE_ATTRS;
+  }
+
   function convertAttributes(el) {
     if (shouldSkipElement(el, true)) return;
     let map = attrState.get(el);
     if (!map) { map = new Map(); attrState.set(el, map); }
     let origMap = attrOriginal.get(el);
     if (!origMap) { origMap = new Map(); attrOriginal.set(el, origMap); }
-    for (const attr of CONVERTIBLE_ATTRS) {
+    for (const attr of convertibleAttrs(el)) {
       if (!el.hasAttribute(attr)) continue;
       const val = el.getAttribute(attr);
       if (val == null) continue;
@@ -767,8 +779,8 @@
 
     // 2) 属性元素：原生选择器一次性查询（包含 root 自身若命中）
     try {
-      if (t === Node.ELEMENT_NODE && root.matches?.(ATTR_SELECTOR)) queue.add(root);
-      root.querySelectorAll?.(ATTR_SELECTOR).forEach((el) => {
+      if (t === Node.ELEMENT_NODE && root.matches?.(COLLECT_SELECTOR)) queue.add(root);
+      root.querySelectorAll?.(COLLECT_SELECTOR).forEach((el) => {
         if (!isSkipTag(el) || allowsOwnAttributes(el)) queue.add(el);
       });
     } catch (e) { /* querySelectorAll 在某些非标准节点上可能抛错，忽略 */ }

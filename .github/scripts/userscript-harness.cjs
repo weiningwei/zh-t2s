@@ -31,6 +31,17 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
   let scans = 0;
   let reloads = 0;
 
+  // 仅支持测试用到的选择器形态：tag、[attr]、tag[attr="value"]。
+  function matchesSimple(el, selector) {
+    const parsed = /^([a-z]*)(?:\[([^\]=]+)(?:="([^"]*)")?\])?$/i.exec(selector.trim());
+    if (!parsed) return false;
+    const [, tag, attr, value] = parsed;
+    if (tag && el.nodeName !== tag.toUpperCase()) return false;
+    if (!attr) return !!tag;
+    if (!el.hasAttribute(attr)) return false;
+    return value === undefined || el.getAttribute(attr) === value;
+  }
+
   // 模拟编辑器及转换队列使用的 DOM/事件边界；不模拟排版或事件冒泡。
   class Element {
     constructor(tag = 'div') {
@@ -85,7 +96,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     hasAttribute(name) { return this.attributes.has(name); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
     matches(selector) {
-      return selector.split(',').some(part => this.hasAttribute(part.slice(1, -1)));
+      return selector.split(',').some(part => matchesSimple(this, part));
     }
     querySelectorAll(selector) {
       const result = [];
