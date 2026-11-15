@@ -8,6 +8,7 @@
 
 ### 修复
 
+- 转换范围漏掉几种文案属性：Bootstrap 类 tooltip 在重新显示时用 `data-original-title` 回填，只转 `title` 会退回原文；`aria-placeholder`、`aria-roledescription`、`aria-valuetext` 是读屏朗读的文案。现在这四项一并转换。
 - `<input type="button|submit|reset|image">` 的按钮文字写在 value 上，整棵子树跳过后一直不转换。现在按类型转换这类 value；type 为 text 等用户输入型的 value 仍然保持原样。
 - 输入框与文本域的占位提示、title、aria-label 等显示属性不转换：这两个标签整棵子树跳过，把页面文案和用户输入混在一起处理。现在内容仍然跳过（value 与文本域正文保持原样），只转换它们自身的可见文案属性。
 

@@ -541,6 +541,26 @@ test('button-type input converts its value label while text input values stay un
   assert.equal(submit.getAttribute('value'), '繁體送出');
 });
 
+test('tooltip and aria text attributes convert alongside the older display attributes', () => {
+  const { api, document } = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const el = document.createElement('div');
+  for (const attr of ['data-original-title', 'aria-placeholder', 'aria-roledescription', 'aria-valuetext']) {
+    el.setAttribute(attr, '繁體文案');
+  }
+  document.documentElement.appendChild(el);
+
+  api.enqueueSubtree(document.documentElement);
+  api.processQueue({ timeRemaining: () => 10 });
+  for (const attr of ['data-original-title', 'aria-placeholder', 'aria-roledescription', 'aria-valuetext']) {
+    assert.equal(el.getAttribute(attr), '简体文案', attr);
+  }
+
+  api.setState('off');
+  for (const attr of ['data-original-title', 'aria-placeholder', 'aria-roledescription', 'aria-valuetext']) {
+    assert.equal(el.getAttribute(attr), '繁體文案', attr + ': restore');
+  }
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

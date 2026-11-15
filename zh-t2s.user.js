@@ -121,7 +121,10 @@
 
   // 需要转换的可见文本属性
   // data-placeholder：部分框架/编辑器用该属性 + CSS content:attr() 渲染占位提示（如 Slate、Quill 定制主题）
-  const CONVERTIBLE_ATTRS = ['placeholder', 'data-placeholder', 'title', 'alt', 'aria-label'];
+  // data-original-title：Bootstrap 类 tooltip 在重新显示时用该属性回填，只转 title 会退回原文
+  // aria-* 三项：读屏软件朗读的文案，同样会显示在无障碍面板里
+  const CONVERTIBLE_ATTRS = ['placeholder', 'data-placeholder', 'title', 'alt', 'aria-label',
+    'data-original-title', 'aria-placeholder', 'aria-roledescription', 'aria-valuetext'];
   // 收集以上属性的选择器：由清单生成，避免入队查询与转换清单两处漂移
   const ATTR_SELECTOR = CONVERTIBLE_ATTRS.map((attr) => '[' + attr + ']').join(',');
 

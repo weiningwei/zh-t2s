@@ -145,7 +145,7 @@
 
 ## 转换范围与限制
 
-处理正文、标题、按钮文字，以及 `title`、`alt`、`aria-label`、`placeholder`、`data-placeholder` 属性。输入框、文本域的内容和属性不处理；跳过代码、样式、模板及嵌入内容，不转换正在编辑的富文本。open shadow DOM 内的文字和属性会转换；closed shadow root 无法访问，只能跳过。
+处理正文、标题、按钮文字，以及 `title`、`alt`、`aria-label`、`aria-placeholder`、`aria-roledescription`、`aria-valuetext`、`placeholder`、`data-placeholder`、`data-original-title` 属性，和按钮类 `input` 的 `value` 文案。输入框、文本域的内容和用户输入值不处理，只转换它们自己的占位提示等显示属性；跳过代码、样式、模板及嵌入内容，不转换正在编辑的富文本。open shadow DOM 内的文字和属性会转换；closed shadow root 无法访问，只能跳过。
 
 默认通过 `@noframes` 禁止在 iframe 中运行。转换仍受浏览器及脚本管理器允许访问的页面范围限制。
 
