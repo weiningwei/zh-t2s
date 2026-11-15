@@ -56,7 +56,11 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
       this.parentElement = null;
       this.value = this.textContent = '';
       this.isConnected = true;
+      // 不模拟排版：高度与滚动位置由用例声明，供视口优先分支读取。
+      this.height = 0;
+      this.scrollTop = 0;
     }
+    getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: this.height }; }
     // class 与 class 属性保持同一份数据：脚本既用 classList 判定忽略区域，
     // 也用 getAttribute('class') 判断类名变化。
     get className() { return this.attributes.get('class') || ''; }

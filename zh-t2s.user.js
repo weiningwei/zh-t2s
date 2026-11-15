@@ -809,6 +809,15 @@
     } catch (e) { /* querySelectorAll 在某些非标准节点上可能抛错，忽略 */ }
   }
 
+  const VIEWPORT_HINT_DEPTH = 3;   // 从命中元素向上取几层祖先
+  const VIEWPORT_HINT_SCREENS = 2; // 祖先超过约两屏就不再扩大范围
+
+  /** 元素高度是否超过上限（读一次布局；不支持或读取失败时按"未超过"处理） */
+  function exceedsHeight(el, maxHeight) {
+    if (!(maxHeight > 0) || typeof el.getBoundingClientRect !== 'function') return false;
+    try { return el.getBoundingClientRect().height > maxHeight; } catch (e) { return false; }
+  }
+
   /** 视口优先：刷新保留滚动位置、锚点跳转或 SPA 路由后，用户眼前的内容在文档里
    *  可能靠后，按文档顺序会排到队尾。队列是 Set（保序），先入队的先转换，
    *  所以这里把视口中心附近的两三层祖先先入队。 */
@@ -817,9 +826,13 @@
     let el = null;
     try { el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2); }
     catch (e) { return; } // 参数不合法或环境不支持时放弃
+    const maxHeight = (Number(window.innerHeight) || 0) * VIEWPORT_HINT_SCREENS;
     // 从命中元素往上取三层：最内层是“这一段”，上面两层覆盖到卡片 / 评论
-    for (let depth = 0; depth < 3 && el && el !== document.body && el !== document.documentElement;
+    for (let depth = 0; depth < VIEWPORT_HINT_DEPTH && el && el !== document.body && el !== document.documentElement;
       depth++, el = el.parentElement) {
+      // 外层比两屏还高就不再往上扩：它的子树大部分在视口外，排到队首会挤掉
+      // 视口内的其他内容（侧栏、悬浮框），还要把这棵大树多遍历一遍。
+      if (depth > 0 && exceedsHeight(el, maxHeight)) break;
       enqueueSubtree(el);
     }
   }

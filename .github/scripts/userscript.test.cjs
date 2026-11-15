@@ -752,6 +752,38 @@ test('the initial scan converts what is inside the viewport first', () => {
   assert.ok(topTexts.every((text) => text.nodeValue === '简体'));
 });
 
+test('the viewport hint stops climbing once an ancestor towers over the screen', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const aside = h.document.createElement('aside');
+  const asideText = h.document.createTextNode('繁體');
+  aside.appendChild(asideText);
+
+  const main = h.document.createElement('main');
+  main.height = 5000; // 远超两屏
+  const section = h.document.createElement('section');
+  const paragraph = h.document.createElement('p');
+  const focusText = h.document.createTextNode('繁體');
+  paragraph.appendChild(focusText);
+  section.appendChild(paragraph);
+  main.appendChild(section);
+  const mainTexts = [];
+  for (let i = 0; i < 400; i++) {
+    const text = h.document.createTextNode('繁體');
+    mainTexts.push(text);
+    main.appendChild(text);
+  }
+  h.document.documentElement.appendChild(aside); // 文档里在 main 之前，但不在视口内
+  h.document.documentElement.appendChild(main);
+
+  h.setViewport({ scrollY: 500, at: paragraph });
+  h.api.start();
+  h.api.processQueue({ timeRemaining: () => 10 });
+
+  assert.equal(focusText.nodeValue, '简体', '命中元素自身仍然优先');
+  assert.equal(asideText.nodeValue, '简体', '没有把整页级容器抢到队首，视口内其他内容照常靠前');
+  assert.ok(mainTexts.some((text) => text.nodeValue === '繁體'), '超出两屏的容器靠后处理');
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
