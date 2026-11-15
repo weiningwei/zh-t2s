@@ -2433,9 +2433,9 @@
     });
   }
 
-  let shortcutSectionOpen = false; // 快捷键在面板里默认收起，只占一行摘要
+  let shortcutSectionOpen = true; // 快捷键区默认展开；点摘要行可收起省空间
 
-  /** 快捷键：收起时一行摘要，点开才是两个方向的录制行 */
+  /** 快捷键：默认展开两个方向的录制行，点摘要行可收起 */
   function renderShortcutControl(panel) {
     const summary = '快捷键 · ' + formatShortcut(shortcutT2S) + ' / ' + formatShortcut(shortcutS2T);
     panel.appendChild(floatPanelRow((shortcutSectionOpen ? '▾ ' : '▸ ') + summary, () => {
