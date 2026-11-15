@@ -205,13 +205,25 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     URL: { createObjectURL(blob) { downloads.push(blob); return 'blob:test'; }, revokeObjectURL() {} }
   };
   sandbox.window = {
-    // 视口相关字段由用例按需改写；默认停在顶部，脚本不会走视口优先分支。
-    scrollY: 0, innerWidth: 1024, innerHeight: 768,
+    // 视口字段由 setViewport 统一写入：假 DOM 没有排版，尺寸与滚动位置没有可推导
+    // 的来源，只能由用例声明；默认停在顶部，脚本不会走视口优先分支。
     // 不测 OpenCC 自身的字形字典；用恒等转换器隔离脚本的自定义规则行为。
     OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined,
     confirm(message) { confirmations.push(message); return confirmation; },
     setTimeout: sandbox.setTimeout
   };
+  // 视口状态收在一处，由 setViewport 同时同步 window 字段与 elementFromPoint，
+  // 避免用例只改一半（例如设了滚动位置却没指定视口中心的元素）。
+  const viewport = { scrollY: 0, width: 1024, height: 768, at: null };
+  function applyViewport() {
+    sandbox.window.scrollY = viewport.scrollY;
+    sandbox.window.innerWidth = viewport.width;
+    sandbox.window.innerHeight = viewport.height;
+    if (viewport.at) document.elementFromPoint = () => viewport.at;
+    else delete document.elementFromPoint;
+  }
+  applyViewport();
+
   const marker = '\n})();';
   assert.equal(source.split(marker).length, 2, 'IIFE 结构改变，请更新测试入口。');
   runInNewContext(source.replace(marker, `
@@ -231,7 +243,13 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
 
   return {
     api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations,
-    window: sandbox.window,
+    // 视口：提供 at（视口中心命中的元素）时必须同时给出 scrollY > 0，
+    // 否则脚本在页面顶部会跳过视口优先分支，用例会得到"什么都没发生"的假象。
+    setViewport({ scrollY = 0, width = 1024, height = 768, at = null } = {}) {
+      assert.ok(!(at && scrollY <= 0), '提供 at 时 scrollY 必须大于 0');
+      Object.assign(viewport, { scrollY, width, height, at });
+      applyViewport();
+    },
     // 模拟 shadow 根：复用 Element 的子节点与查询能力，nodeType 设为文档片段。
     createShadowRoot() {
       const root = new Element();

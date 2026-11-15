@@ -741,8 +741,7 @@ test('the initial scan converts what is inside the viewport first', () => {
   h.document.documentElement.appendChild(top);
   h.document.documentElement.appendChild(bottom);
 
-  h.window.scrollY = 600; // 用户停在页面中部
-  h.document.elementFromPoint = () => bottom;
+  h.setViewport({ scrollY: 600, at: bottom }); // 用户停在页面中部，视口中心命中底部段落
 
   h.api.start();
   h.api.processQueue({ timeRemaining: () => 10 }); // 只处理一批（CHUNK_SIZE）
