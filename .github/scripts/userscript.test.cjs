@@ -859,7 +859,8 @@ test('the tool dialog follows the dark preference', () => {
 
 const shortcutEvent = (key, { ctrl = false, alt = false, shift = false, meta = false } = {}) => ({
   key, ctrlKey: ctrl, altKey: alt, shiftKey: shift, metaKey: meta,
-  preventDefault() {}, stopPropagation() {}
+  preventDefault() {}, stopPropagation() {},
+  stopImmediatePropagation() { this.immediatePropagationStopped = true; }
 });
 
 test('recording a shortcut stores it and the new key drives the page', async () => {
@@ -905,6 +906,20 @@ test('the recorded shortcut toggles the page and other tabs pick it up', async (
   other.storage.set('zh-t2s-shortcut-t2s', { key: 'J', ctrl: true, alt: false, shift: false, meta: false });
   other.receiveBroadcast({ type: 'zh-t2s-shortcuts' });
   assert.equal(other.api.shortcutConfig().t2s.key, 'J', '广播后跟上其他标签页的修改');
+});
+
+test('Escape during capture cancels recording without reaching other keydown listeners', () => {
+  const h = loadUserscript();
+  let panelSawEscape = false;
+  // 面板打开时会在 document 上再挂一个 Esc 处理器，这里用同样的方式模拟
+  h.document.addEventListener('keydown', (e) => { if (e.key === 'Escape') panelSawEscape = true; });
+
+  h.api.beginShortcutCapture('t2s');
+  h.document.fire('keydown', shortcutEvent('Escape'));
+
+  assert.equal(h.api.shortcutState(), null, 'Esc 结束录制');
+  assert.equal(h.api.shortcutMessage(), '');
+  assert.equal(panelSawEscape, false, '录制期间 Esc 不应传给面板的关闭逻辑');
 });
 
 test('all separators, whitespace and missing separators', () => {

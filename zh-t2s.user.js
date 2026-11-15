@@ -1437,10 +1437,12 @@
    * 表单聚焦时（input/textarea/contenteditable）不响应。
    * ============================================================ */
   document.addEventListener('keydown', (e) => {
-    // 录制快捷键期间独占键盘：按键只用于记录，不触发页面或脚本自身
+    // 录制快捷键期间独占键盘：按键只用于记录，不触发页面或脚本自身。
+    // 必须用 stopImmediatePropagation：面板打开时还挂着 onFloatPanelKeydown，
+    // 只用 stopPropagation 的话同一个 document 上的那个监听照样会把面板关掉。
     if (shortcutCapture) {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       if (e.key === 'Escape') { shortcutCapture = null; shortcutError = ''; renderFloatPanelContent(); return; }
       if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return; // 只按了修饰键，继续等
       if (!isUsableShortcut(e)) {
@@ -1690,7 +1692,8 @@
   }
 
   function onFloatPanelKeydown(e) {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || shortcutCapture) return; // 正在录制快捷键时 Esc 属于录制
+
     e.preventDefault();
     e.stopPropagation();
     closeFloatPanel();

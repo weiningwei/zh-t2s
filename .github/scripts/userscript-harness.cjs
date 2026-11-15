@@ -72,7 +72,13 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     }
     removeEventListener() {}
     fire(name, event = {}) {
-      return Promise.all((this.listeners.get(name) || []).map(fn => fn(event)));
+      // 顺序调用，并粗略模拟 stopImmediatePropagation：它阻止同一节点上的后续监听
+      const results = [];
+      for (const fn of [...(this.listeners.get(name) || [])]) {
+        results.push(fn(event));
+        if (event.immediatePropagationStopped) break;
+      }
+      return Promise.all(results);
     }
     click() { return this.fire('click'); }
     appendChild(child) {
