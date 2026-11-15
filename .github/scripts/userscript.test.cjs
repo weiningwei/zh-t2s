@@ -676,6 +676,22 @@ test('the click rescan is deferred to one full scan per second instead of being 
   assert.ok(second.delay <= 1000);
 });
 
+test('observer options are reused until the id ignore rules change', () => {
+  const h = loadUserscript();
+  h.api.start();
+  const first = h.observations[0][1];
+  assert.equal(first.attributeFilter.includes('id'), false);
+
+  h.storage.set('zh-t2s-enabled', 's2t');
+  h.api.syncPageSettings(); // 方向变化会重新 observe
+  assert.equal(h.observations.at(-1)[1], first, '规则未变时复用同一份选项对象');
+
+  h.api.saveIgnoreRules(['#ad']);
+  const updated = h.observations.at(-1)[1];
+  assert.notEqual(updated, first, 'id 规则变化后重建选项');
+  assert.ok(updated.attributeFilter.includes('id'));
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {

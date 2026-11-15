@@ -556,7 +556,9 @@
   }
   let ignoreRules = [];
   let ignoreTags = new Set(), ignoreClasses = new Set(), ignoreIds = new Set();
+  let observerOptionsCache = null; // 观察选项只建一次，忽略规则变化时失效
   function installIgnoreRules(rules) {
+    observerOptionsCache = null;
     ignoreRules = rules;
     ignoreTags = new Set(rules.filter(s => !/^[.#]/.test(s)).map(s => s.toUpperCase()));
     ignoreClasses = new Set(rules.filter(s => s[0] === '.').map(s => s.slice(1)));
@@ -567,8 +569,11 @@
   /** class 始终观察：.ignore-opencc 可能被页面动态加上或移除，需要据此重扫该子树。
    *  id 只在配置了 #id 忽略规则时观察，避免无谓回调。 */
   function observerOptions() {
-    return { ...OBSERVER_OPTIONS, attributeOldValue: true,
-      attributeFilter: [...CONVERTIBLE_ATTRS, 'class', ...(ignoreIds.size ? ['id'] : [])] };
+    if (!observerOptionsCache) {
+      observerOptionsCache = { ...OBSERVER_OPTIONS, attributeOldValue: true,
+        attributeFilter: [...CONVERTIBLE_ATTRS, 'class', ...(ignoreIds.size ? ['id'] : [])] };
+    }
+    return observerOptionsCache;
   }
   function saveIgnoreRules(rules) {
     const next = validateIgnoreRules(rules);
