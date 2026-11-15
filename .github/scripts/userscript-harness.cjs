@@ -205,6 +205,8 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
     URL: { createObjectURL(blob) { downloads.push(blob); return 'blob:test'; }, revokeObjectURL() {} }
   };
   sandbox.window = {
+    // 视口相关字段由用例按需改写；默认停在顶部，脚本不会走视口优先分支。
+    scrollY: 0, innerWidth: 1024, innerHeight: 768,
     // 不测 OpenCC 自身的字形字典；用恒等转换器隔离脚本的自定义规则行为。
     OpenCC: hasOpenCC ? { Converter: () => text => text } : undefined,
     confirm(message) { confirmations.push(message); return confirmation; },
@@ -229,6 +231,7 @@ function loadUserscript({ dictionary = { t2s: [], s2t: [] }, whitelist = [],
 
   return {
     api: sandbox.api, storage, timers, downloads, observations, document, broadcasts, writes, confirmations,
+    window: sandbox.window,
     // 模拟 shadow 根：复用 Element 的子节点与查询能力，nodeType 设为文档片段。
     createShadowRoot() {
       const root = new Element();

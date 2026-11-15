@@ -809,6 +809,27 @@
     } catch (e) { /* querySelectorAll 在某些非标准节点上可能抛错，忽略 */ }
   }
 
+  /** 视口优先：刷新保留滚动位置、锚点跳转或 SPA 路由后，用户眼前的内容在文档里
+   *  可能靠后，按文档顺序会排到队尾。队列是 Set（保序），先入队的先转换，
+   *  所以这里把视口中心附近的两三层祖先先入队。 */
+  function enqueueViewportHint() {
+    if (!(window.scrollY > 0) || typeof document.elementFromPoint !== 'function') return;
+    let el = null;
+    try { el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2); }
+    catch (e) { return; } // 参数不合法或环境不支持时放弃
+    // 从命中元素往上取三层：最内层是“这一段”，上面两层覆盖到卡片 / 评论
+    for (let depth = 0; depth < 3 && el && el !== document.body && el !== document.documentElement;
+      depth++, el = el.parentElement) {
+      enqueueSubtree(el);
+    }
+  }
+
+  /** 全量收集：先把视口位置的内容排到队首，再扫整篇文档 */
+  function enqueueDocument() {
+    enqueueViewportHint();
+    enqueueSubtree(document.documentElement);
+  }
+
   /* ============================================================
    * 4.1 Shadow DOM：TreeWalker／querySelectorAll／MutationObserver 都不跨越 shadow 边界
    * ============================================================
@@ -1139,13 +1160,13 @@
       reconvertAll();
       // 还没参与过转换的节点（新内容、刚从排除区域放出来）仍需扫一次；已重写的节点
       // 在队列里被 textState 守卫 O(1) 跳过。
-      enqueueSubtree(document.documentElement);
+      enqueueDocument();
       scheduleIdle();
     } else if (!wasActive && isActive && hasOpenCC) {
       // 从关闭到开启（同方向）
       convert = converterForState(newState);
       observer.observe(document.documentElement, observerOptions());
-      enqueueSubtree(document.documentElement);
+      enqueueDocument();
       scheduleIdle();
     }
     // off->off / 同状态: 无操作
@@ -2318,8 +2339,9 @@
       convert = converterForState(effectiveState());
       // 先开启观察，避免初始扫描期间外部脚本插入的内容被遗漏
       observer.observe(document.documentElement, observerOptions());
-      // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）
-      enqueueSubtree(document.documentElement);
+      // 初始全量扫描（TreeWalker 仅收集引用，转换在空闲帧中分批进行）；
+      // 用户停在页面中部时先把视口附近的内容排到队首
+      enqueueDocument();
       scheduleIdle();
     }
     registerMenu(); // 无论站点停用/关闭/无 opencc 状态都注册菜单，供用户管理

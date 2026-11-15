@@ -726,6 +726,33 @@ test('switching direction rewrites from the original in a single write', () => {
   assert.equal(text.nodeValue, '繁體文案', '关闭仍可还原原文');
 });
 
+test('the initial scan converts what is inside the viewport first', () => {
+  const h = loadUserscript({ dictionary: data([['繁體', '简体']]) });
+  const top = h.document.createElement('div');
+  const topTexts = [];
+  for (let i = 0; i < 400; i++) {
+    const text = h.document.createTextNode('繁體');
+    topTexts.push(text);
+    top.appendChild(text);
+  }
+  const bottom = h.document.createElement('p');
+  const bottomText = h.document.createTextNode('繁體');
+  bottom.appendChild(bottomText);
+  h.document.documentElement.appendChild(top);
+  h.document.documentElement.appendChild(bottom);
+
+  h.window.scrollY = 600; // 用户停在页面中部
+  h.document.elementFromPoint = () => bottom;
+
+  h.api.start();
+  h.api.processQueue({ timeRemaining: () => 10 }); // 只处理一批（CHUNK_SIZE）
+  assert.equal(bottomText.nodeValue, '简体', '视口内的内容排到队首');
+  assert.ok(topTexts.some((text) => text.nodeValue === '繁體'), '屏外内容稍后转换');
+
+  h.api.processQueue({ timeRemaining: () => 10 });
+  assert.ok(topTexts.every((text) => text.nodeValue === '简体'));
+});
+
 test('all separators, whitespace and missing separators', () => {
   const { api } = loadUserscript();
   for (const separator of ['=>', '->', '→', '＝＞', '＝>', '\t']) {
