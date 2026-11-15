@@ -304,7 +304,7 @@ test('global selector changes only the global default and explains its scope', a
   await select.fire('change');
   assert.equal(storage.get('zh-t2s-enabled'), 'off');
   assert.equal(api.effectiveState(), 's2t');
-  assert.match(panel.children[1].textContent, /仅影响.*跟随全局/);
+  assert.equal(panel.children.length, 1, '作用范围已由“跟随全局”选项表达，不再附提示行');
   const sitePanel = document.createElement('div');
   api.renderSitePreferenceControl(sitePanel);
   assert.match(sitePanel.children[1].textContent, /仅对此网站生效/);

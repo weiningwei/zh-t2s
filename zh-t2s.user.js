@@ -2453,7 +2453,8 @@
 
   /** 快捷键：默认展开两个方向的录制行，点摘要行可收起 */
   function renderShortcutControl(panel) {
-    const summary = '快捷键 · ' + formatShortcut(shortcutT2S) + ' / ' + formatShortcut(shortcutS2T);
+    // 展开时下面两行已经有组合，摘要行不再重复一遍
+    const summary = shortcutSectionOpen ? '快捷键' : '快捷键 · ' + formatShortcut(shortcutT2S) + ' / ' + formatShortcut(shortcutS2T);
     panel.appendChild(floatPanelRow((shortcutSectionOpen ? '▾ ' : '▸ ') + summary, () => {
       shortcutSectionOpen = !shortcutSectionOpen;
       renderFloatPanelContent();
@@ -2488,10 +2489,7 @@
       ['t2s', '繁→简'], ['s2t', '简→繁'], ['off', '不转换']
     ], state, setState, 'global'));
     panel.appendChild(label);
-    const hint = document.createElement('div');
-    hint.className = 'zh-t2s-hint';
-    hint.textContent = '仅影响选择“跟随全局”的网站。';
-    panel.appendChild(hint);
+    // 作用范围已由站点下拉里的“跟随全局”选项表达，不再重复解释
   }
 
   // 保持扁平布局：当前网站优先，全局默认次之，低频操作收在底部。
